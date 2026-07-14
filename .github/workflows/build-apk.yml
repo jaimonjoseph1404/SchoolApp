@@ -16,15 +16,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build APK with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
+      - uses: actions/setup-python@v5
         with:
-          command: buildozer android debug
-          buildozer_version: stable
+          python-version: "3.11"
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk \
+            autoconf automake libtool pkg-config \
+            zlib1g-dev libncurses-dev libncursesw5-dev \
+            cmake libffi-dev libssl-dev build-essential \
+            libltdl-dev
+
+      - name: Install buildozer and Cython
+        run: |
+          pip install --upgrade pip
+          pip install buildozer==1.5.0 cython==0.29.36
+
+      - name: Cache Android SDK/NDK and build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            .buildozer
+            ~/.buildozer
+          key: buildozer-android-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-android-
+
+      - name: Build APK with Buildozer
+        run: yes | buildozer -v android debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: education-tracker-debug-apk
-          path: ${{ steps.buildozer.outputs.filename }}
+          path: bin/*.apk

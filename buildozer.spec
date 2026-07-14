@@ -26,6 +26,9 @@ android.minapi = 24
 # Single arch for the first build to keep CI time/risk down (covers the vast
 # majority of modern devices); add armeabi-v7a back once this succeeds.
 android.archs = arm64-v8a
+# Required for non-interactive CI builds — otherwise buildozer blocks
+# waiting for an interactive SDK license prompt that never comes.
+android.accept_sdk_license = True
 
 [buildozer]
 log_level = 2
