@@ -1,0 +1,16 @@
+kivy[base]==2.3.1
+kivymd==1.2.0
+plyer==2.1.0
+kivy_deps.angle==0.4.0; sys_platform == 'win32'
+kivy_deps.glew==0.3.1; sys_platform == 'win32'
+kivy_deps.sdl2==0.8.0; sys_platform == 'win32'
+
+# Analytics, exports, security, OCR
+matplotlib==3.11.0
+numpy==2.5.1
+reportlab==5.0.0
+openpyxl==3.1.5
+cryptography==49.0.0
+pytesseract==0.3.13
+pypdfium2==5.11.0
+pillow==10.4.0

@@ -1,0 +1,57 @@
+<AnalyticsScreen>:
+    name: "analytics"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Analytics"
+            elevation: 4
+            left_action_items: [["menu", lambda x: app.open_nav_drawer()]]
+
+        ScrollView:
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: "16dp"
+                spacing: "12dp"
+                adaptive_height: True
+
+                MDBoxLayout:
+                    id: child_field_container
+                    adaptive_height: True
+
+                MDBoxLayout:
+                    id: charts_container
+                    orientation: "vertical"
+                    spacing: "16dp"
+                    adaptive_height: True
+
+                MDTextField:
+                    id: subject_field
+                    hint_text: "View a subject trend"
+                    readonly: True
+                    on_focus: if self.focus: root.open_subject_menu()
+
+                MDLabel:
+                    text: "Predictions"
+                    font_style: "H6"
+                    adaptive_height: True
+                    padding: ("0dp", "8dp", "0dp", "0dp")
+
+                MDLabel:
+                    id: predictions_label
+                    text: ""
+                    adaptive_height: True
+                    theme_text_color: "Secondary"
+
+                MDLabel:
+                    text: "AI Insights"
+                    font_style: "H6"
+                    adaptive_height: True
+                    padding: ("0dp", "8dp", "0dp", "0dp")
+
+                MDBoxLayout:
+                    id: insights_container
+                    orientation: "vertical"
+                    spacing: "4dp"
+                    adaptive_height: True

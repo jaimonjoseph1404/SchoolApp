@@ -1,0 +1,63 @@
+<ReportsScreen>:
+    name: "reports"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Reports"
+            elevation: 4
+            left_action_items: [["menu", lambda x: app.open_nav_drawer()]]
+
+        ScrollView:
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: "16dp"
+                spacing: "12dp"
+                adaptive_height: True
+
+                MDLabel:
+                    text: "Academic & Expense Reports"
+                    font_style: "H6"
+                    adaptive_height: True
+
+                MDBoxLayout:
+                    id: child_field_container
+                    adaptive_height: True
+
+                MDRaisedButton:
+                    text: "Academic Year Summary (PDF)"
+                    size_hint_x: 1
+                    on_release: root.generate_academic_pdf()
+
+                MDRaisedButton:
+                    text: "Expense Report (CSV)"
+                    size_hint_x: 1
+                    on_release: root.generate_expense_csv()
+
+                MDRaisedButton:
+                    text: "Expense Report (Excel)"
+                    size_hint_x: 1
+                    on_release: root.generate_expense_excel()
+
+                MDLabel:
+                    text: "Teacher Effectiveness Report"
+                    font_style: "H6"
+                    adaptive_height: True
+                    padding: ("0dp", "16dp", "0dp", "0dp")
+
+                MDBoxLayout:
+                    id: teacher_field_container
+                    adaptive_height: True
+
+                MDRaisedButton:
+                    text: "Teacher Effectiveness (PDF)"
+                    size_hint_x: 1
+                    on_release: root.generate_teacher_pdf()
+
+                MDLabel:
+                    text: "Reports are saved to the app's private data folder."
+                    theme_text_color: "Secondary"
+                    font_style: "Caption"
+                    adaptive_height: True
+                    padding: ("0dp", "16dp", "0dp", "0dp")

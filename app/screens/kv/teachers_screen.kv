@@ -1,0 +1,46 @@
+<TeachersScreen>:
+    name: "teachers"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Teachers"
+            elevation: 4
+            left_action_items: [["menu", lambda x: app.open_nav_drawer()]]
+
+        ScrollView:
+            MDBoxLayout:
+                orientation: "vertical"
+                adaptive_height: True
+
+                MDLabel:
+                    id: empty_label
+                    text: "No teachers added yet. Tap + to add one."
+                    halign: "center"
+                    theme_text_color: "Secondary"
+                    adaptive_height: True
+                    padding: ("0dp", "24dp")
+
+                MDList:
+                    id: teacher_list
+
+                MDBoxLayout:
+                    adaptive_height: True
+                    padding: "16dp", "16dp", "16dp", "4dp"
+
+                    MDLabel:
+                        text: "Subject Assignments"
+                        font_style: "H6"
+
+                    MDFlatButton:
+                        text: "+ Assign"
+                        on_release: root.open_assign_dialog()
+
+                MDList:
+                    id: assignment_list
+
+    MDFloatingActionButton:
+        icon: "plus"
+        pos_hint: {"right": 0.95, "y": 0.04}
+        on_release: root.add_teacher()

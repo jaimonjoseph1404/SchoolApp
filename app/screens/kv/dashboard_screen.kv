@@ -1,0 +1,189 @@
+<DashboardScreen>:
+    name: "dashboard"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Education Tracker"
+            elevation: 4
+            left_action_items: [["menu", lambda x: app.open_nav_drawer()]]
+            right_action_items: [["magnify", lambda x: app.go_to_screen("search")], ["bell-outline", lambda x: app.show_notifications()]]
+
+        ScrollView:
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: "16dp"
+                spacing: "16dp"
+                adaptive_height: True
+
+                MDLabel:
+                    text: "Overview"
+                    font_style: "H5"
+                    adaptive_height: True
+
+                MDCard:
+                    orientation: "vertical"
+                    padding: "16dp"
+                    size_hint_y: None
+                    height: "90dp"
+                    radius: [12]
+
+                    MDLabel:
+                        id: children_count_label
+                        text: "0"
+                        font_style: "H4"
+                        adaptive_height: True
+
+                    MDLabel:
+                        text: "Children enrolled"
+                        theme_text_color: "Secondary"
+                        adaptive_height: True
+
+                MDLabel:
+                    text: "Modules"
+                    font_style: "H6"
+                    adaptive_height: True
+
+                MDGridLayout:
+                    cols: 2
+                    spacing: "12dp"
+                    adaptive_height: True
+
+                    MDCard:
+                        orientation: "vertical"
+                        padding: "12dp"
+                        size_hint_y: None
+                        height: "104dp"
+                        radius: [12]
+                        ripple_behavior: True
+                        on_release: app.go_to_screen("children_list")
+
+                        MDIcon:
+                            icon: "account-child"
+
+                        MDLabel:
+                            text: "Children"
+                            bold: True
+                            adaptive_height: True
+
+                        MDLabel:
+                            text: "Manage enrolled children"
+                            theme_text_color: "Secondary"
+                            font_style: "Caption"
+                            adaptive_height: True
+
+                    MDCard:
+                        orientation: "vertical"
+                        padding: "12dp"
+                        size_hint_y: None
+                        height: "104dp"
+                        radius: [12]
+                        ripple_behavior: True
+                        on_release: app.go_to_screen("academic_records")
+
+                        MDIcon:
+                            icon: "book-open-page-variant"
+
+                        MDLabel:
+                            text: "Academic Records"
+                            bold: True
+                            adaptive_height: True
+
+                        MDLabel:
+                            text: "Marks & term history"
+                            theme_text_color: "Secondary"
+                            font_style: "Caption"
+                            adaptive_height: True
+
+                    MDCard:
+                        orientation: "vertical"
+                        padding: "12dp"
+                        size_hint_y: None
+                        height: "104dp"
+                        radius: [12]
+                        ripple_behavior: True
+                        on_release: app.go_to_screen("scan_report")
+
+                        MDIcon:
+                            icon: "camera"
+
+                        MDLabel:
+                            text: "Scan Report"
+                            bold: True
+                            adaptive_height: True
+
+                        MDLabel:
+                            text: "OCR report capture"
+                            theme_text_color: "Secondary"
+                            font_style: "Caption"
+                            adaptive_height: True
+
+                    MDCard:
+                        orientation: "vertical"
+                        padding: "12dp"
+                        size_hint_y: None
+                        height: "104dp"
+                        radius: [12]
+                        ripple_behavior: True
+                        on_release: app.go_to_screen("expenses")
+
+                        MDIcon:
+                            icon: "cash-multiple"
+
+                        MDLabel:
+                            text: "Expenses"
+                            bold: True
+                            adaptive_height: True
+
+                        MDLabel:
+                            text: "Track educational costs"
+                            theme_text_color: "Secondary"
+                            font_style: "Caption"
+                            adaptive_height: True
+
+                    MDCard:
+                        orientation: "vertical"
+                        padding: "12dp"
+                        size_hint_y: None
+                        height: "104dp"
+                        radius: [12]
+                        ripple_behavior: True
+                        on_release: app.go_to_screen("teachers")
+
+                        MDIcon:
+                            icon: "account-tie"
+
+                        MDLabel:
+                            text: "Teachers"
+                            bold: True
+                            adaptive_height: True
+
+                        MDLabel:
+                            text: "Teacher effectiveness"
+                            theme_text_color: "Secondary"
+                            font_style: "Caption"
+                            adaptive_height: True
+
+                    MDCard:
+                        orientation: "vertical"
+                        padding: "12dp"
+                        size_hint_y: None
+                        height: "104dp"
+                        radius: [12]
+                        ripple_behavior: True
+                        on_release: app.go_to_screen("analytics")
+
+                        MDIcon:
+                            icon: "chart-line"
+
+                        MDLabel:
+                            text: "Analytics"
+                            bold: True
+                            adaptive_height: True
+
+                        MDLabel:
+                            text: "Trends & AI insights"
+                            theme_text_color: "Secondary"
+                            font_style: "Caption"
+                            adaptive_height: True

@@ -1,0 +1,54 @@
+<SettingsScreen>:
+    name: "settings"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Settings"
+            elevation: 4
+            left_action_items: [["menu", lambda x: app.open_nav_drawer()]]
+
+        MDBoxLayout:
+            orientation: "vertical"
+            padding: "16dp"
+            spacing: "12dp"
+            adaptive_height: True
+
+            MDBoxLayout:
+                adaptive_height: True
+
+                MDLabel:
+                    text: "Dark Mode"
+
+                MDSwitch:
+                    id: dark_mode_switch
+                    on_active: root.on_theme_toggle(self.active)
+
+            MDBoxLayout:
+                adaptive_height: True
+
+                MDLabel:
+                    text: "PIN Lock"
+
+                MDSwitch:
+                    id: pin_switch
+                    on_active: root.on_pin_toggle(self.active)
+
+            MDFlatButton:
+                id: change_pin_button
+                text: "Change PIN"
+                on_release: root.change_pin()
+
+            MDLabel:
+                text: "Fingerprint / face unlock and full-database encryption require native platform integration not available in this build. PIN lock plus AES-256 encrypted backups (see Backup) cover access control for now."
+                theme_text_color: "Secondary"
+                font_style: "Caption"
+                adaptive_height: True
+                padding: ("0dp", "16dp", "0dp", "0dp")
+
+            MDLabel:
+                text: "Education Performance & Cost Tracker\nVersion 0.1.0 (Phase 1)"
+                theme_text_color: "Secondary"
+                adaptive_height: True
+                padding: ("0dp", "16dp", "0dp", "0dp")

@@ -1,0 +1,124 @@
+<ChildFormScreen>:
+    name: "child_form"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            id: title_bar
+            title: "Add Child"
+            elevation: 4
+            left_action_items: [["arrow-left", lambda x: root.go_back()]]
+
+        ScrollView:
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: "16dp"
+                spacing: "10dp"
+                adaptive_height: True
+
+                MDLabel:
+                    text: "Personal Information"
+                    font_style: "H6"
+                    adaptive_height: True
+
+                MDTextField:
+                    id: full_name_field
+                    hint_text: "Full Name *"
+
+                MDTextField:
+                    id: gender_field
+                    hint_text: "Gender"
+                    readonly: True
+
+                MDBoxLayout:
+                    adaptive_height: True
+                    spacing: "8dp"
+
+                    MDTextField:
+                        id: dob_field
+                        hint_text: "Date of Birth"
+                        readonly: True
+
+                    MDIconButton:
+                        icon: "calendar"
+                        on_release: root.open_date_picker()
+
+                MDTextField:
+                    id: school_name_field
+                    hint_text: "School Name"
+
+                MDTextField:
+                    id: admission_number_field
+                    hint_text: "Admission Number"
+
+                MDTextField:
+                    id: current_class_field
+                    hint_text: "Current Class"
+
+                MDTextField:
+                    id: section_field
+                    hint_text: "Section"
+
+                MDTextField:
+                    id: academic_year_field
+                    hint_text: "Academic Year (e.g. 2026-2027)"
+
+                MDBoxLayout:
+                    adaptive_height: True
+                    spacing: "8dp"
+
+                    MDTextField:
+                        id: photo_field
+                        hint_text: "Photo"
+                        readonly: True
+
+                    MDIconButton:
+                        icon: "folder-image"
+                        on_release: root.browse_photo()
+
+                MDLabel:
+                    text: "Optional Information"
+                    font_style: "H6"
+                    adaptive_height: True
+                    padding: ("0dp", "12dp")
+
+                MDTextField:
+                    id: blood_group_field
+                    hint_text: "Blood Group"
+                    readonly: True
+
+                MDTextField:
+                    id: parent_notes_field
+                    hint_text: "Parent Notes"
+                    multiline: True
+
+                MDTextField:
+                    id: medical_notes_field
+                    hint_text: "Medical Notes"
+                    multiline: True
+
+                MDTextField:
+                    id: interests_field
+                    hint_text: "Interests"
+
+                MDTextField:
+                    id: career_aspiration_field
+                    hint_text: "Career Aspiration"
+
+                MDBoxLayout:
+                    adaptive_height: True
+                    spacing: "12dp"
+                    padding: ("0dp", "16dp")
+
+                    MDFlatButton:
+                        id: delete_button
+                        text: "Delete"
+                        theme_text_color: "Error"
+                        on_release: root.delete()
+
+                    Widget:
+
+                    MDRaisedButton:
+                        text: "Save"
+                        on_release: root.save()

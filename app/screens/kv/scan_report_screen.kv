@@ -1,0 +1,111 @@
+<ScanReportScreen>:
+    name: "scan_report"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Scan Report"
+            elevation: 4
+            left_action_items: [["menu", lambda x: app.open_nav_drawer()]]
+
+        ScrollView:
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: "16dp"
+                spacing: "10dp"
+                adaptive_height: True
+
+                MDBoxLayout:
+                    id: child_field_container
+                    adaptive_height: True
+
+                MDLabel:
+                    text: "Exam Context"
+                    font_style: "H6"
+                    adaptive_height: True
+
+                MDBoxLayout:
+                    spacing: "8dp"
+                    adaptive_height: True
+
+                    MDTextField:
+                        id: year_field
+                        hint_text: "Academic Year *"
+
+                    MDTextField:
+                        id: class_field
+                        hint_text: "Class *"
+
+                    MDTextField:
+                        id: section_field
+                        hint_text: "Section"
+
+                MDBoxLayout:
+                    spacing: "8dp"
+                    adaptive_height: True
+
+                    MDTextField:
+                        id: term_field
+                        hint_text: "Term *"
+
+                    MDTextField:
+                        id: exam_type_field
+                        hint_text: "Exam Type *"
+
+                    MDTextField:
+                        id: exam_date_field
+                        hint_text: "Exam Date (YYYY-MM-DD)"
+
+                MDLabel:
+                    text: "Capture Report"
+                    font_style: "H6"
+                    adaptive_height: True
+                    padding: ("0dp", "12dp", "0dp", "0dp")
+
+                MDBoxLayout:
+                    spacing: "8dp"
+                    adaptive_height: True
+
+                    MDRaisedButton:
+                        text: "Camera"
+                        icon: "camera"
+                        on_release: root.capture_camera()
+
+                    MDRaisedButton:
+                        text: "Gallery"
+                        icon: "image"
+                        on_release: root.pick_gallery_image()
+
+                    MDRaisedButton:
+                        text: "Upload PDF"
+                        icon: "file-pdf-box"
+                        on_release: root.pick_pdf()
+
+                MDLabel:
+                    id: ocr_status_label
+                    text: ""
+                    theme_text_color: "Secondary"
+                    adaptive_height: True
+
+                MDBoxLayout:
+                    adaptive_height: True
+                    padding: ("0dp", "8dp", "0dp", "4dp")
+
+                    MDLabel:
+                        text: "Subjects & Marks (verify before saving)"
+                        font_style: "Subtitle1"
+
+                    MDFlatButton:
+                        text: "+ Add Row"
+                        on_release: root.add_blank_row()
+
+                MDBoxLayout:
+                    id: marks_table_container
+                    orientation: "vertical"
+                    adaptive_height: True
+
+                MDRaisedButton:
+                    text: "Save Report"
+                    pos_hint: {"right": 1}
+                    on_release: root.save()

@@ -1,0 +1,74 @@
+<ExpenseFormScreen>:
+    name: "expense_form"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Add Expense"
+            elevation: 4
+            left_action_items: [["arrow-left", lambda x: root.go_back()]]
+
+        ScrollView:
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: "16dp"
+                spacing: "10dp"
+                adaptive_height: True
+
+                MDLabel:
+                    id: child_label
+                    text: "For: -"
+                    theme_text_color: "Secondary"
+                    adaptive_height: True
+
+                MDTextField:
+                    id: category_field
+                    hint_text: "Category *"
+                    readonly: True
+                    on_focus: if self.focus: root.open_category_menu()
+
+                MDTextField:
+                    id: amount_field
+                    hint_text: "Amount *"
+                    input_filter: "float"
+
+                MDBoxLayout:
+                    adaptive_height: True
+                    spacing: "8dp"
+
+                    MDTextField:
+                        id: date_field
+                        hint_text: "Date"
+                        readonly: True
+
+                    MDIconButton:
+                        icon: "calendar"
+                        on_release: root.open_date_picker()
+
+                MDTextField:
+                    id: year_field
+                    hint_text: "Academic Year (optional)"
+
+                MDTextField:
+                    id: description_field
+                    hint_text: "Description"
+
+                MDBoxLayout:
+                    adaptive_height: True
+                    spacing: "8dp"
+
+                    MDTextField:
+                        id: receipt_field
+                        hint_text: "Receipt (image/PDF)"
+                        readonly: True
+
+                    MDIconButton:
+                        icon: "folder-image"
+                        on_release: root.browse_receipt()
+
+                MDRaisedButton:
+                    text: "Save Expense"
+                    pos_hint: {"right": 1}
+                    padding: ("0dp", "16dp")
+                    on_release: root.save()

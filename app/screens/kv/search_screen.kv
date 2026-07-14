@@ -1,0 +1,20 @@
+<SearchScreen>:
+    name: "search"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Search"
+            elevation: 4
+            left_action_items: [["arrow-left", lambda x: root.go_back()]]
+
+        MDTextField:
+            id: search_field
+            hint_text: "Search children, subjects, teachers, years, schools..."
+            padding: "16dp"
+            on_text: root.on_search_text(self.text)
+
+        ScrollView:
+            MDList:
+                id: results_list

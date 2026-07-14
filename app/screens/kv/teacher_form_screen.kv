@@ -1,0 +1,68 @@
+<TeacherFormScreen>:
+    name: "teacher_form"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            id: title_bar
+            title: "Add Teacher"
+            elevation: 4
+            left_action_items: [["arrow-left", lambda x: root.go_back()]]
+
+        ScrollView:
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: "16dp"
+                spacing: "10dp"
+                adaptive_height: True
+
+                MDTextField:
+                    id: name_field
+                    hint_text: "Teacher Name *"
+
+                MDTextField:
+                    id: subject_field
+                    hint_text: "Subject"
+
+                MDTextField:
+                    id: qualification_field
+                    hint_text: "Qualification"
+
+                MDTextField:
+                    id: experience_field
+                    hint_text: "Experience"
+
+                MDTextField:
+                    id: phone_field
+                    hint_text: "Phone Number"
+
+                MDTextField:
+                    id: email_field
+                    hint_text: "Email"
+
+                MDTextField:
+                    id: school_name_field
+                    hint_text: "School"
+
+                MDTextField:
+                    id: notes_field
+                    hint_text: "Notes"
+                    multiline: True
+
+                MDBoxLayout:
+                    adaptive_height: True
+                    spacing: "12dp"
+                    padding: ("0dp", "16dp")
+
+                    MDFlatButton:
+                        id: delete_button
+                        text: "Delete"
+                        theme_text_color: "Error"
+                        on_release: root.delete()
+
+                    Widget:
+
+                    MDRaisedButton:
+                        text: "Save"
+                        on_release: root.save()

@@ -1,0 +1,31 @@
+<ExpensesScreen>:
+    name: "expenses"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Expenses"
+            elevation: 4
+            left_action_items: [["menu", lambda x: app.open_nav_drawer()]]
+
+        MDBoxLayout:
+            id: child_field_container
+            adaptive_height: True
+            padding: "16dp", "16dp", "16dp", "0dp"
+
+        MDLabel:
+            id: total_label
+            text: "Select a child to view expenses"
+            bold: True
+            adaptive_height: True
+            padding: "16dp", "8dp"
+
+        ScrollView:
+            MDList:
+                id: expense_list
+
+    MDFloatingActionButton:
+        icon: "plus"
+        pos_hint: {"right": 0.95, "y": 0.04}
+        on_release: root.add_expense()

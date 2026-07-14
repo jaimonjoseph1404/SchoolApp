@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+app/data/*.db
+app/data/backups/
+app/data/reports/
+app/data/attachments/
+.buildozer/
+bin/
+*.spec.local

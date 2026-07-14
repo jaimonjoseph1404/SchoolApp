@@ -1,0 +1,667 @@
+# Education Performance and Cost Tracking Application
+
+## Product Requirements Document (PRD) – Phase 1
+
+# 1. Project Overview
+
+Develop a cross-platform Education Performance and Cost Tracking application for parents to monitor and analyze the academic performance, educational expenses, and teacher effectiveness for multiple children.
+
+The application shall be developed entirely in Python and must support:
+
+* Android OS (Primary target for Phase 1)
+* Windows OS Desktop Application
+* Shared codebase for both platforms
+* Local offline operation without internet dependency
+* Future migration to cloud/server architecture
+
+The first deliverable is an Android APK application with support for Windows desktop execution.
+
+---
+
+# 2. Business Objectives
+
+The application should help parents to:
+
+1. Digitize and maintain historical academic records.
+2. Automatically extract marks from scanned progress reports.
+3. Analyze academic progress over years.
+4. Track educational expenses for each child.
+5. Predict future educational costs.
+6. Measure teacher effectiveness based on student performance.
+7. Maintain all educational information in a single application.
+8. Operate completely offline while maintaining privacy.
+
+---
+
+# 3. Technology Requirements
+
+## Programming Language
+
+* Python 3.12+
+
+## Mobile Framework
+
+Preferred order:
+
+1. Kivy + KivyMD
+2. Flet
+3. BeeWare
+
+## OCR Engine
+
+* Tesseract OCR
+* PaddleOCR
+* EasyOCR
+
+Application should support replacing OCR engines in future versions.
+
+## Database
+
+* SQLite local database.
+
+## Export Format
+
+* JSON
+* CSV
+* Excel
+* PDF reports
+
+## Packaging
+
+Android:
+
+* Build APK using Buildozer.
+
+Windows:
+
+* Build executable using PyInstaller.
+
+---
+
+# 4. User Roles
+
+Phase 1 supports only:
+
+## Parent Administrator
+
+Can:
+
+* Add children.
+* Manage records.
+* Scan reports.
+* View analytics.
+* Export and import data.
+
+Future phases:
+
+* Parent users
+* Teacher users
+* School users
+
+---
+
+# 5. Child Management Module
+
+## Add Child Screen
+
+Fields:
+
+### Personal Information
+
+* Child ID (Auto Generated)
+* Full Name
+* Gender
+* Date of Birth
+* School Name
+* Admission Number
+* Current Class
+* Section
+* Academic Year
+* Photo
+
+### Optional Information
+
+* Blood Group
+* Parent Notes
+* Medical Notes
+* Interests
+* Career Aspiration
+
+---
+
+# 6. Academic Record Management
+
+The system must maintain historical academic data from Kindergarten until graduation.
+
+Hierarchy:
+
+Child
+→ Academic Year
+→ Class
+→ Term
+→ Subject
+→ Exam
+→ Marks
+
+Example:
+
+Arthur
+→ 2026-2027
+→ Grade 5
+→ Mid Term
+→ Mathematics
+→ Marks: 92/100
+
+---
+
+# 7. Progress Report Scanning Module
+
+## Input Methods
+
+* Camera capture
+* Gallery image
+* PDF upload
+
+Supported formats:
+
+* JPG
+* PNG
+* PDF
+
+---
+
+## OCR Processing Workflow
+
+Step 1:
+User selects child.
+
+Step 2:
+User selects:
+
+* Academic Year
+* Class
+* Exam Type
+
+Step 3:
+Capture image or upload report.
+
+Step 4:
+OCR extracts:
+
+* Subject names
+* Marks obtained
+* Maximum marks
+* Grade
+* Percentage
+* Rank
+* Remarks
+
+Step 5:
+Application displays extracted data.
+
+Step 6:
+Parent verifies and corrects OCR mistakes.
+
+Step 7:
+Data is stored permanently.
+
+---
+
+## OCR Accuracy Requirements
+
+Target accuracy:
+
+* Printed reports: 95%+
+* Digital PDF reports: 99%+
+
+Manual correction option must always be available.
+
+---
+
+# 8. Academic Analytics Module
+
+## Child Performance Dashboard
+
+Display:
+
+* Overall percentage trend.
+* Subject-wise trend.
+* Strength areas.
+* Weak areas.
+* Improvement rate.
+* Class rank trend.
+* Attendance trend.
+* Exam comparison.
+
+---
+
+## Visual Charts
+
+Examples:
+
+* Percentage by year.
+* Mathematics trend.
+* Science trend.
+* Subject ranking.
+* Radar chart for subject strengths.
+* Year-over-year improvement chart.
+
+---
+
+## AI Insights
+
+Examples:
+
+"Mathematics scores improved by 12% over the last 3 years."
+
+"Science scores are declining since Grade 4."
+
+"English performance is consistently above class average."
+
+"Additional support may be required in Social Studies."
+
+---
+
+## Prediction Engine
+
+Predict:
+
+* Expected score next exam.
+* Expected yearly average.
+* Probability of improvement.
+* Subject risk score.
+
+Suggested models:
+
+* Linear Regression
+* Random Forest
+* XGBoost
+
+---
+
+# 9. Educational Expense Management
+
+## Expense Categories
+
+Each expense belongs to:
+
+* Tuition Fee
+* Admission Fee
+* Books
+* Uniform
+* Bus Fee
+* Examination Fee
+* Activity Fee
+* Sports Fee
+* Laboratory Fee
+* Technology Fee
+* Coaching Fee
+* Miscellaneous
+
+---
+
+## Fee Capture Methods
+
+### Method 1
+
+Scan fee receipt image.
+
+### Method 2
+
+Upload PDF receipt.
+
+### Method 3
+
+Manual entry.
+
+OCR extracts:
+
+* School name
+* Receipt number
+* Date
+* Fee components
+* Amount
+* Total amount
+
+---
+
+## Expense Hierarchy
+
+Child
+→ Academic Year
+→ Class
+→ Fee Category
+→ Payment Record
+
+---
+
+## Expense Analytics
+
+Display:
+
+* Total cost per child.
+* Cost per year.
+* Cost per class.
+* Category wise spending.
+* Average yearly growth.
+* Future cost estimate.
+
+---
+
+## Predictions
+
+Examples:
+
+"Estimated education cost until Grade 12: ₹18,50,000"
+
+"Average yearly increase: 8.2%"
+
+"Bus fees increased 12% YoY."
+
+---
+
+# 10. Teacher Management Module
+
+## Teacher Master Data
+
+Fields:
+
+* Teacher ID
+* Name
+* Subject
+* Qualification
+* Experience
+* Phone Number
+* Email
+* School
+* Notes
+
+---
+
+## Teacher Mapping
+
+Child
+→ Academic Year
+→ Class
+→ Subject
+→ Teacher
+
+Example:
+
+Arthur
+→ Grade 5
+→ Mathematics
+→ Mr John
+
+---
+
+## Teacher Analytics
+
+Metrics:
+
+* Student score average.
+* Improvement percentage.
+* Year-over-year trend.
+* Subject performance under teacher.
+
+Examples:
+
+"Mathematics average improved by 15% under Teacher A."
+
+"English scores declined after teacher change."
+
+---
+
+# 11. Reports Module
+
+Generate reports:
+
+## Academic Reports
+
+* Year summary.
+* Subject summary.
+* Child summary.
+
+## Expense Reports
+
+* Annual expense report.
+* Category report.
+* Forecast report.
+
+## Teacher Reports
+
+* Teacher effectiveness report.
+
+Supported export formats:
+
+* PDF
+* Excel
+* CSV
+
+---
+
+# 12. Backup and Restore Module
+
+## Export Options
+
+* JSON backup
+* ZIP archive
+* Excel export
+
+---
+
+## Import Options
+
+Restore entire database from:
+
+* JSON
+* ZIP archive
+
+---
+
+## Sharing Options
+
+* Email backup.
+* Share through WhatsApp.
+* Google Drive upload in future versions.
+
+---
+
+# 13. Notification Module
+
+Examples:
+
+* Exam result not uploaded.
+* Fee due reminder.
+* Upcoming academic year transition.
+* Backup reminder.
+
+---
+
+# 14. Search Module
+
+Global search by:
+
+* Child name
+* Subject
+* Teacher
+* Academic year
+* School
+* Expense category
+
+---
+
+# 15. Security Requirements
+
+Application shall support:
+
+* PIN lock
+* Password lock
+* Fingerprint authentication
+* Face unlock (if device supports)
+* Encrypted local database
+* Encrypted backup file
+
+Encryption:
+
+* AES-256
+
+---
+
+# 16. Performance Requirements
+
+Startup time:
+
+* Less than 3 seconds.
+
+OCR processing:
+
+* Less than 10 seconds per document.
+
+Database size:
+
+* Support minimum 50 years of records.
+
+Children supported:
+
+* Minimum 20 children.
+
+---
+
+# 17. UI Requirements
+
+Theme:
+
+* Material Design.
+
+Modes:
+
+* Light Mode
+* Dark Mode
+
+Navigation:
+
+Dashboard
+├── Children
+├── Academic Records
+├── Scan Report
+├── Expenses
+├── Teachers
+├── Analytics
+├── Reports
+├── Backup
+└── Settings
+
+---
+
+# 18. Phase 1 Deliverables
+
+## Android APK
+
+Features:
+
+* Child enrollment.
+* Progress report scanning.
+* OCR extraction.
+* Academic analytics.
+* Expense tracking.
+* Fee receipt scanning.
+* Export and import.
+* Email sharing.
+* Local database.
+
+---
+
+## Windows Desktop Application
+
+Features identical to Android version.
+
+---
+
+# 19. Phase 2 Roadmap
+
+* Cloud synchronization.
+* Multi-device synchronization.
+* Parent portal.
+* Web application.
+* Server-client architecture.
+* AI chatbot assistant.
+* School ERP integration.
+* Google Drive backup.
+* OCR auto learning.
+* Teacher benchmarking across schools.
+* Attendance analysis.
+* Homework tracking.
+* Timetable management.
+* Competition tracking.
+* Certificates and achievements management.
+* Career recommendation engine.
+
+---
+
+# 20. Database Entities
+
+Core tables:
+
+* Children
+* Schools
+* AcademicYears
+* Classes
+* Subjects
+* Exams
+* Marks
+* Teachers
+* TeacherAssignments
+* Expenses
+* ExpenseCategories
+* FeeReceipts
+* Attachments
+* OCRHistory
+* Predictions
+* Backups
+* Settings
+
+---
+
+# 21. Recommended Architecture
+
+UI Layer
+↓
+Business Logic Layer
+↓
+OCR Engine Layer
+↓
+Analytics Engine
+↓
+Prediction Engine
+↓
+SQLite Database Layer
+
+Future:
+
+Mobile/Desktop Client
+↓
+REST API
+↓
+Cloud Server
+↓
+Central Database
+
+---
+
+# 22. Success Criteria
+
+The project will be considered successful when:
+
+1. Parent can enroll children.
+2. Progress report scanning achieves at least 95% OCR accuracy.
+3. Fee receipt scanning works reliably.
+4. Historical data can be exported and imported.
+5. Academic trends can be visualized.
+6. Educational expenses can be forecasted.
+7. Teacher effectiveness can be analyzed.
+8. The application runs fully offline on Android and Windows.
+
+End of Requirement Specification.
+
+Please note: later this requirement may enhance 

@@ -1,0 +1,65 @@
+<BackupScreen>:
+    name: "backup"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Backup & Restore"
+            elevation: 4
+            left_action_items: [["menu", lambda x: app.open_nav_drawer()]]
+
+        ScrollView:
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: "16dp"
+                spacing: "12dp"
+                adaptive_height: True
+
+                MDLabel:
+                    id: status_label
+                    text: "No backups yet."
+                    theme_text_color: "Secondary"
+                    adaptive_height: True
+
+                MDLabel:
+                    text: "Export"
+                    font_style: "H6"
+                    adaptive_height: True
+
+                MDRaisedButton:
+                    text: "Export JSON Backup"
+                    size_hint_x: 1
+                    on_release: root.export_json()
+
+                MDRaisedButton:
+                    text: "Export ZIP (with photos & receipts)"
+                    size_hint_x: 1
+                    on_release: root.export_zip()
+
+                MDRaisedButton:
+                    text: "Export Encrypted Backup (AES-256)"
+                    size_hint_x: 1
+                    on_release: root.export_encrypted()
+
+                MDFlatButton:
+                    text: "Share Latest Backup via Email"
+                    size_hint_x: 1
+                    on_release: root.share_email()
+
+                MDLabel:
+                    text: "Import"
+                    font_style: "H6"
+                    adaptive_height: True
+                    padding: ("0dp", "16dp", "0dp", "0dp")
+
+                MDLabel:
+                    text: "Restoring replaces all current data with the backup's contents."
+                    theme_text_color: "Secondary"
+                    font_style: "Caption"
+                    adaptive_height: True
+
+                MDRaisedButton:
+                    text: "Import Backup File"
+                    size_hint_x: 1
+                    on_release: root.import_backup()

@@ -1,0 +1,27 @@
+<ChildrenListScreen>:
+    name: "children_list"
+
+    MDBoxLayout:
+        orientation: "vertical"
+
+        MDTopAppBar:
+            title: "Children"
+            elevation: 4
+            left_action_items: [["menu", lambda x: app.open_nav_drawer()]]
+
+        MDLabel:
+            id: empty_label
+            text: "No children added yet. Tap + to add one."
+            halign: "center"
+            theme_text_color: "Secondary"
+            adaptive_height: True
+            padding: ("0dp", "24dp")
+
+        ScrollView:
+            MDList:
+                id: children_list
+
+    MDFloatingActionButton:
+        icon: "plus"
+        pos_hint: {"right": 0.95, "y": 0.04}
+        on_release: root.add_child()
