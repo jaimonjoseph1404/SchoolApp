@@ -8,35 +8,33 @@ from kivymd.uix.list import IconLeftWidget, OneLineIconListItem
 
 from app.core.database import get_db
 from app.repositories.settings_repository import SettingsRepository
-from app.screens.academic_records_screen import AcademicRecordsScreen
-from app.screens.analytics_screen import AnalyticsScreen
-from app.screens.backup_screen import BackupScreen
 from app.screens.child_form_screen import ChildFormScreen
 from app.screens.children_screen import ChildrenListScreen
 from app.screens.dashboard_screen import DashboardScreen
-from app.screens.expense_form_screen import ExpenseFormScreen
-from app.screens.expenses_screen import ExpensesScreen
-from app.screens.lock_screen import LockScreen
-from app.screens.reports_screen import ReportsScreen
-from app.screens.scan_report_screen import ScanReportScreen
-from app.screens.search_screen import SearchScreen
-from app.screens.settings_screen import SettingsScreen
-from app.screens.teacher_form_screen import TeacherFormScreen
-from app.screens.teachers_screen import TeachersScreen
+
+# TEMPORARY bisection: commented out to isolate an Android launch crash to
+# either "core Phase 1 screens" or "one of these later-added modules". Not
+# imported at all right now, so this also rules out an import-time crash in
+# any of these specific modules. Restore once the crash is found and fixed.
+# from app.screens.academic_records_screen import AcademicRecordsScreen
+# from app.screens.analytics_screen import AnalyticsScreen
+# from app.screens.backup_screen import BackupScreen
+# from app.screens.expense_form_screen import ExpenseFormScreen
+# from app.screens.expenses_screen import ExpensesScreen
+# from app.screens.lock_screen import LockScreen
+# from app.screens.reports_screen import ReportsScreen
+# from app.screens.scan_report_screen import ScanReportScreen
+# from app.screens.search_screen import SearchScreen
+# from app.screens.settings_screen import SettingsScreen
+# from app.screens.teacher_form_screen import TeacherFormScreen
+# from app.screens.teachers_screen import TeachersScreen
 
 KV_DIR = Path(__file__).parent / "screens" / "kv"
 
+# TEMPORARY bisection: trimmed to only the screens actually registered below.
 NAV_ITEMS = [
     ("view-dashboard", "Dashboard", "dashboard"),
     ("account-child", "Children", "children_list"),
-    ("book-open-page-variant", "Academic Records", "academic_records"),
-    ("camera", "Scan Report", "scan_report"),
-    ("cash-multiple", "Expenses", "expenses"),
-    ("account-tie", "Teachers", "teachers"),
-    ("chart-line", "Analytics", "analytics"),
-    ("file-chart", "Reports", "reports"),
-    ("cloud-upload", "Backup", "backup"),
-    ("cog", "Settings", "settings"),
 ]
 
 ROOT_KV = """
@@ -86,26 +84,10 @@ class SchoolApp(MDApp):
         self.screen_manager.add_widget(DashboardScreen())
         self.screen_manager.add_widget(ChildrenListScreen())
         self.screen_manager.add_widget(ChildFormScreen())
-        self.screen_manager.add_widget(AcademicRecordsScreen())
-        self.screen_manager.add_widget(TeachersScreen())
-        self.screen_manager.add_widget(TeacherFormScreen())
-        self.screen_manager.add_widget(ExpensesScreen())
-        self.screen_manager.add_widget(ExpenseFormScreen())
-        self.screen_manager.add_widget(ScanReportScreen())
-        self.screen_manager.add_widget(AnalyticsScreen())
-        self.screen_manager.add_widget(ReportsScreen())
-        self.screen_manager.add_widget(BackupScreen())
-        self.screen_manager.add_widget(SettingsScreen())
-        self.screen_manager.add_widget(SearchScreen())
-        self.screen_manager.add_widget(LockScreen())
 
         self._populate_drawer(root.ids.drawer_list)
 
-        if settings.is_pin_lock_enabled():
-            self.locked = True
-            self.screen_manager.current = "lock"
-        else:
-            self.screen_manager.current = "dashboard"
+        self.screen_manager.current = "dashboard"
 
         return root
 
