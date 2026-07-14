@@ -12,17 +12,21 @@ from app.screens.child_form_screen import ChildFormScreen
 from app.screens.children_screen import ChildrenListScreen
 from app.screens.dashboard_screen import DashboardScreen
 
-# TEMPORARY bisection: commented out to isolate an Android launch crash to
-# either "core Phase 1 screens" or "one of these later-added modules". Not
-# imported at all right now, so this also rules out an import-time crash in
-# any of these specific modules. Restore once the crash is found and fixed.
+# TEMPORARY bisection round 2: core screens confirmed working on-device.
+# Testing ReportsScreen alone now — it's the top suspect, since
+# report_service.py has an unguarded top-level `from openpyxl import
+# Workbook`. If openpyxl fails to import on Android, that import chain
+# (app.py -> reports_screen -> report_service -> openpyxl) crashes before any
+# UI renders, which matches the "splash flashes and closes" symptom exactly.
+from app.screens.reports_screen import ReportsScreen
+
+# Still excluded pending this result:
 # from app.screens.academic_records_screen import AcademicRecordsScreen
 # from app.screens.analytics_screen import AnalyticsScreen
 # from app.screens.backup_screen import BackupScreen
 # from app.screens.expense_form_screen import ExpenseFormScreen
 # from app.screens.expenses_screen import ExpensesScreen
 # from app.screens.lock_screen import LockScreen
-# from app.screens.reports_screen import ReportsScreen
 # from app.screens.scan_report_screen import ScanReportScreen
 # from app.screens.search_screen import SearchScreen
 # from app.screens.settings_screen import SettingsScreen
@@ -35,6 +39,7 @@ KV_DIR = Path(__file__).parent / "screens" / "kv"
 NAV_ITEMS = [
     ("view-dashboard", "Dashboard", "dashboard"),
     ("account-child", "Children", "children_list"),
+    ("file-chart", "Reports", "reports"),
 ]
 
 ROOT_KV = """
@@ -84,6 +89,7 @@ class SchoolApp(MDApp):
         self.screen_manager.add_widget(DashboardScreen())
         self.screen_manager.add_widget(ChildrenListScreen())
         self.screen_manager.add_widget(ChildFormScreen())
+        self.screen_manager.add_widget(ReportsScreen())
 
         self._populate_drawer(root.ids.drawer_list)
 
