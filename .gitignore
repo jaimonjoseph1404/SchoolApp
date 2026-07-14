@@ -7,5 +7,6 @@ app/data/reports/
 app/data/attachments/
 .buildozer/
 bin/
+apk_output/
 *.spec.local
 .claude/
