@@ -1,10 +1,11 @@
 """Reports Module (PRD section 11) — Academic, Expense and Teacher reports as PDF/Excel/CSV.
 
-PDF generation (reportlab) is imported lazily and guarded: reportlab's
-optional C accelerator has no python-for-android recipe and fails to cross-
-compile against newer Python (see buildozer.spec), so it isn't in the
-Android build's requirements yet. CSV/Excel export (stdlib csv, openpyxl)
-are pure Python and always available.
+PDF generation (reportlab) and Excel export (openpyxl) are both imported
+lazily and guarded, same reasoning for both: on a real Android build,
+whatever caused openpyxl's top-level import to crash the app before any UI
+rendered (see the app.py bisection notes) means "pure Python" isn't a safe
+enough assumption to hard-import at module level here. CSV export (stdlib)
+is always available.
 """
 from __future__ import annotations
 
@@ -12,8 +13,6 @@ import csv
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-
-from openpyxl import Workbook
 
 from app.repositories.academic_repository import AcademicRepository
 from app.repositories.child_repository import ChildRepository
@@ -27,10 +26,22 @@ try:
 except Exception:
     PDF_AVAILABLE = False
 
+try:
+    import openpyxl  # noqa: F401
+
+    EXCEL_AVAILABLE = True
+except Exception:
+    EXCEL_AVAILABLE = False
+
 
 def _require_pdf():
     if not PDF_AVAILABLE:
         raise RuntimeError("PDF export isn't available on this build (reportlab not installed).")
+
+
+def _require_excel():
+    if not EXCEL_AVAILABLE:
+        raise RuntimeError("Excel export isn't available on this build (openpyxl not installed).")
 
 
 def reports_dir() -> Path:
@@ -114,6 +125,9 @@ def expense_report_csv(child_id: int, path: Optional[Path] = None) -> Path:
 
 
 def expense_report_excel(child_id: int, path: Optional[Path] = None) -> Path:
+    _require_excel()
+    from openpyxl import Workbook
+
     child = ChildRepository().get(child_id)
     if child is None:
         raise ValueError(f"No child with id {child_id}")

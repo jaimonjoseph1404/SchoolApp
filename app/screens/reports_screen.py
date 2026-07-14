@@ -71,7 +71,11 @@ class ReportsScreen(MDScreen):
         if not self._selected_child_id:
             show_snackbar("Select a child first")
             return
-        path = report_service.expense_report_excel(self._selected_child_id)
+        try:
+            path = report_service.expense_report_excel(self._selected_child_id)
+        except RuntimeError as exc:
+            show_snackbar(str(exc))
+            return
         show_snackbar(f"Saved: {path.name}")
 
     def generate_teacher_pdf(self):
