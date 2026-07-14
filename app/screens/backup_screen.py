@@ -34,7 +34,11 @@ class BackupScreen(MDScreen):
         self._prompt_password("Set a backup password", self._do_export_encrypted)
 
     def _do_export_encrypted(self, password):
-        path = backup_service.export_encrypted(password)
+        try:
+            path = backup_service.export_encrypted(password)
+        except RuntimeError as exc:
+            show_snackbar(str(exc))
+            return
         self.refresh_status()
         show_snackbar(f"Encrypted backup saved: {path.name}")
 
@@ -73,7 +77,7 @@ class BackupScreen(MDScreen):
         try:
             backup_service.import_encrypted(password, path)
             show_snackbar("Restored from encrypted backup")
-        except ValueError as exc:
+        except (ValueError, RuntimeError) as exc:
             show_snackbar(str(exc))
 
     def _prompt_password(self, title, on_confirm):

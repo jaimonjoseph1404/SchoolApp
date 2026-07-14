@@ -55,17 +55,22 @@ class AnalyticsScreen(MDScreen):
 
         child_id = self._selected_child_id
 
-        trend = self.engine.percentage_trend(child_id)
-        fig = chart_service.line_chart(
-            [p.label for p in trend], [p.value for p in trend], title="Overall Percentage Trend"
-        )
-        self.ids.charts_container.add_widget(figure_to_image(fig))
+        if chart_service.CHARTS_AVAILABLE:
+            trend = self.engine.percentage_trend(child_id)
+            fig = chart_service.line_chart(
+                [p.label for p in trend], [p.value for p in trend], title="Overall Percentage Trend"
+            )
+            self.ids.charts_container.add_widget(figure_to_image(fig))
 
-        averages = self.engine.subject_averages(child_id)
-        fig2 = chart_service.radar_chart(
-            list(averages.keys()), list(averages.values()), title="Subject Strengths"
-        )
-        self.ids.charts_container.add_widget(figure_to_image(fig2, height="320dp"))
+            averages = self.engine.subject_averages(child_id)
+            fig2 = chart_service.radar_chart(
+                list(averages.keys()), list(averages.values()), title="Subject Strengths"
+            )
+            self.ids.charts_container.add_widget(figure_to_image(fig2, height="320dp"))
+        else:
+            self.ids.charts_container.add_widget(
+                _wrapped_label("Charts aren't available on this build — showing text insights below.")
+            )
 
         overall = self.engine.predict_overall(child_id)
         growth = self.engine.expense_yearly_growth(child_id)
@@ -95,6 +100,8 @@ class AnalyticsScreen(MDScreen):
             self.ids.insights_container.add_widget(_wrapped_label(f"•  {insight}"))
 
     def _render_subject_chart(self, subject):
+        if not chart_service.CHARTS_AVAILABLE:
+            return
         if self._subject_chart_widget is not None:
             self.ids.charts_container.remove_widget(self._subject_chart_widget)
             self._subject_chart_widget = None

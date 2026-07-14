@@ -1,14 +1,19 @@
-"""Converts a matplotlib Figure into a Kivy Image widget."""
+"""Converts a matplotlib Figure into a Kivy Image widget.
+
+Only call this when app.services.chart_service.CHARTS_AVAILABLE is True —
+matplotlib is an optional dependency (see chart_service for why).
+"""
 from __future__ import annotations
 
 from io import BytesIO
 
-import matplotlib.pyplot as plt
 from kivy.core.image import Image as CoreImage
 from kivy.uix.image import Image as KivyImage
 
 
 def figure_to_image(fig, **kwargs) -> KivyImage:
+    import matplotlib.pyplot as plt
+
     buf = BytesIO()
     fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
     plt.close(fig)

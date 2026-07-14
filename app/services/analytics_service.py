@@ -1,19 +1,19 @@
 """Academic Analytics + Prediction Engine (PRD section 8).
 
-Uses a lightweight linear-regression predictor (numpy.polyfit) rather than
+Uses a lightweight, hand-written linear-regression predictor rather than
 Random Forest/XGBoost: the PRD lists those as *suggested* models, and a
 dependency-light linear trend is more appropriate for an offline, low-data
 (a handful of exams per year) mobile app. The interface here is the natural
 seam for swapping in a heavier model later if per-child datasets grow large
-enough to benefit from one.
+enough to benefit from one. Deliberately doesn't use numpy — pulling in a
+compiled dependency for a ~20-point least-squares fit isn't worth the
+Android cross-compilation risk (see buildozer.spec) for something this small.
 """
 from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
-
-import numpy as np
 
 from app.repositories.academic_repository import AcademicRepository
 from app.repositories.expense_repository import ExpenseRepository
@@ -41,15 +41,20 @@ def _linear_fit(values: List[float]) -> Prediction:
             confidence=None,
             trend="insufficient data",
         )
-    x = np.arange(n, dtype=float)
-    y = np.array(values, dtype=float)
-    slope, intercept = np.polyfit(x, y, 1)
+    xs = list(range(n))
+    x_mean = sum(xs) / n
+    y_mean = sum(values) / n
+    ss_xy = sum((x - x_mean) * (y - y_mean) for x, y in zip(xs, values))
+    ss_xx = sum((x - x_mean) ** 2 for x in xs)
+    slope = ss_xy / ss_xx if ss_xx else 0.0
+    intercept = y_mean - slope * x_mean
     predicted = slope * n + intercept
-    y_hat = slope * x + intercept
-    ss_res = float(np.sum((y - y_hat) ** 2))
-    ss_tot = float(np.sum((y - y.mean()) ** 2))
+
+    ss_res = sum((y - (slope * x + intercept)) ** 2 for x, y in zip(xs, values))
+    ss_tot = sum((y - y_mean) ** 2 for y in values)
     r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
     r2 = max(0.0, min(1.0, r2))
+
     if abs(slope) < 0.5:
         trend = "stable"
     elif slope > 0:
@@ -57,8 +62,8 @@ def _linear_fit(values: List[float]) -> Prediction:
     else:
         trend = "declining"
     return Prediction(
-        predicted_value=round(float(predicted), 2), confidence=round(r2, 2),
-        trend=trend, slope=round(float(slope), 3),
+        predicted_value=round(predicted, 2), confidence=round(r2, 2),
+        trend=trend, slope=round(slope, 3),
     )
 
 

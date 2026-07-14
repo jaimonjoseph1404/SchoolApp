@@ -8,3 +8,4 @@ app/data/attachments/
 .buildozer/
 bin/
 *.spec.local
+.claude/

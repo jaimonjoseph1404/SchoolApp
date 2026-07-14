@@ -5,18 +5,30 @@ app/widgets/chart_image.py) rather than embedded via kivy_garden.matplotlib,
 which doesn't import on Python 3.12+ (it depends on the removed stdlib
 `distutils`). Static PNGs are simpler and sufficient since these charts are
 not interactive.
+
+matplotlib is imported lazily and guarded: it has no python-for-android
+recipe track record as solid as numpy's, and isn't in the Android build's
+requirements (see buildozer.spec) until that's verified in a real build.
+CHARTS_AVAILABLE lets the Analytics screen degrade to text-only insights
+instead of crashing when it isn't present.
 """
 from __future__ import annotations
 
 from typing import Dict, List, Sequence
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
 TEAL = "#00796B"
 AMBER = "#FFA000"
+
+try:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    CHARTS_AVAILABLE = True
+except Exception:
+    plt = None
+    CHARTS_AVAILABLE = False
 
 
 def line_chart(labels: Sequence[str], values: Sequence[float], title: str = "", ylabel: str = "%"):
@@ -49,8 +61,6 @@ def bar_chart(labels: Sequence[str], values: Sequence[float], title: str = "", y
 
 
 def radar_chart(categories: Sequence[str], values: Sequence[float], title: str = "Subject Strengths"):
-    import numpy as np
-
     fig = plt.figure(figsize=(4.5, 4.5))
     if not categories:
         ax = fig.add_subplot(111)

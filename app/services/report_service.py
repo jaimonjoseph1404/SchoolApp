@@ -1,4 +1,11 @@
-"""Reports Module (PRD section 11) — Academic, Expense and Teacher reports as PDF/Excel/CSV."""
+"""Reports Module (PRD section 11) — Academic, Expense and Teacher reports as PDF/Excel/CSV.
+
+PDF generation (reportlab) is imported lazily and guarded: reportlab's
+optional C accelerator has no python-for-android recipe and fails to cross-
+compile against newer Python (see buildozer.spec), so it isn't in the
+Android build's requirements yet. CSV/Excel export (stdlib csv, openpyxl)
+are pure Python and always available.
+"""
 from __future__ import annotations
 
 import csv
@@ -6,16 +13,24 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from openpyxl import Workbook
 
 from app.repositories.academic_repository import AcademicRepository
 from app.repositories.child_repository import ChildRepository
 from app.repositories.expense_repository import ExpenseRepository
 from app.repositories.teacher_repository import TeacherRepository
+
+try:
+    import reportlab  # noqa: F401
+
+    PDF_AVAILABLE = True
+except Exception:
+    PDF_AVAILABLE = False
+
+
+def _require_pdf():
+    if not PDF_AVAILABLE:
+        raise RuntimeError("PDF export isn't available on this build (reportlab not installed).")
 
 
 def reports_dir() -> Path:
@@ -39,6 +54,12 @@ def _timestamped_name(prefix: str, ext: str) -> str:
 
 
 def academic_summary_pdf(child_id: int, path: Optional[Path] = None) -> Path:
+    _require_pdf()
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
     child = ChildRepository().get(child_id)
     if child is None:
         raise ValueError(f"No child with id {child_id}")
@@ -119,6 +140,12 @@ def expense_report_excel(child_id: int, path: Optional[Path] = None) -> Path:
 
 
 def teacher_effectiveness_pdf(teacher_id: int, path: Optional[Path] = None) -> Path:
+    _require_pdf()
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
     teacher = TeacherRepository().get(teacher_id)
     if teacher is None:
         raise ValueError(f"No teacher with id {teacher_id}")

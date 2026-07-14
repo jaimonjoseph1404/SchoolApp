@@ -6,6 +6,11 @@ database at rest (that would require SQLCipher, which has no prebuilt wheel
 for this Python/Windows/Android combination without a custom native build —
 out of scope here). PIN/password app-lock (see settings_repository) covers
 access control for the live app.
+
+The `cryptography` package (needed only for the encrypted-backup functions)
+is imported lazily and guarded: it requires a Rust toolchain to cross-
+compile for Android, which isn't set up in the CI build yet. Plain JSON/ZIP
+backup, which most users will use anyway, doesn't need it at all.
 """
 from __future__ import annotations
 
@@ -17,11 +22,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-
 from app.core.database import get_db
+
+try:
+    import cryptography  # noqa: F401
+
+    ENCRYPTION_AVAILABLE = True
+except Exception:
+    ENCRYPTION_AVAILABLE = False
+
+
+def _require_encryption():
+    if not ENCRYPTION_AVAILABLE:
+        raise RuntimeError("Encrypted backup isn't available on this build (cryptography not installed).")
 
 # Parents before children, so a restore can insert in this order with
 # foreign_keys temporarily disabled.
@@ -165,11 +178,17 @@ def import_zip(path: Path, conn=None) -> None:
 
 # --- AES-256-GCM encrypted backup ---
 def _derive_key(password: str, salt: bytes) -> bytes:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
     kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=_PBKDF2_ITERATIONS)
     return kdf.derive(password.encode("utf-8"))
 
 
 def export_encrypted(password: str, path: Optional[Path] = None, conn=None) -> Path:
+    _require_encryption()
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
     payload = json.dumps(export_all(conn), default=str).encode("utf-8")
     salt = os.urandom(16)
     nonce = os.urandom(12)
@@ -184,6 +203,9 @@ def export_encrypted(password: str, path: Optional[Path] = None, conn=None) -> P
 
 
 def import_encrypted(password: str, path: Path, conn=None) -> None:
+    _require_encryption()
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
     raw = Path(path).read_bytes()
     if raw[:4] != MAGIC:
         raise ValueError("Not a recognized encrypted backup file")

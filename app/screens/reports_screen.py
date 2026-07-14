@@ -53,7 +53,11 @@ class ReportsScreen(MDScreen):
         if not self._selected_child_id:
             show_snackbar("Select a child first")
             return
-        path = report_service.academic_summary_pdf(self._selected_child_id)
+        try:
+            path = report_service.academic_summary_pdf(self._selected_child_id)
+        except RuntimeError as exc:
+            show_snackbar(str(exc))
+            return
         show_snackbar(f"Saved: {path.name}")
 
     def generate_expense_csv(self):
@@ -74,5 +78,9 @@ class ReportsScreen(MDScreen):
         if not self.teacher_field.selected_teacher_id:
             show_snackbar("Select a teacher first")
             return
-        path = report_service.teacher_effectiveness_pdf(self.teacher_field.selected_teacher_id)
+        try:
+            path = report_service.teacher_effectiveness_pdf(self.teacher_field.selected_teacher_id)
+        except RuntimeError as exc:
+            show_snackbar(str(exc))
+            return
         show_snackbar(f"Saved: {path.name}")
