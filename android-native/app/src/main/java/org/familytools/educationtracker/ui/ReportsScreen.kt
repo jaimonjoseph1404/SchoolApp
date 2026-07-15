@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +36,9 @@ import kotlinx.coroutines.launch
 fun ReportsScreen(viewModel: ReportsViewModel, onBack: () -> Unit) {
     val children by viewModel.children.collectAsState()
     val teachers by viewModel.teachers.collectAsState()
+    val academicPreview by viewModel.academicPreview.collectAsState()
+    val expensePreview by viewModel.expensePreview.collectAsState()
+    val teacherPreview by viewModel.teacherPreview.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -54,12 +60,13 @@ fun ReportsScreen(viewModel: ReportsViewModel, onBack: () -> Unit) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).padding(16.dp),
+            modifier = Modifier.padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Academic & Expense Reports", style = MaterialTheme.typography.titleMedium)
             EntityDropdownField(
-                "Child", children, selectedChild?.fullName ?: "", { it.fullName }, { selectedChild = it },
+                "Child", children, selectedChild?.fullName ?: "", { it.fullName },
+                { selectedChild = it; viewModel.loadChildPreview(it.id) },
                 modifier = Modifier.fillMaxWidth(),
             )
             Button(
@@ -77,9 +84,39 @@ fun ReportsScreen(viewModel: ReportsViewModel, onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Expense Report (CSV)") }
 
+            if (selectedChild != null) {
+                Text("Marks — ${selectedChild!!.fullName}", style = MaterialTheme.typography.titleSmall)
+                if (academicPreview.isEmpty()) {
+                    Text("No academic records yet.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    academicPreview.forEach { row ->
+                        Text(
+                            "${row.yearLabel} · ${row.className} · ${row.termName} · ${row.examType} — " +
+                                "${row.subjectName}: ${row.marksObtained?.toInt() ?: "-"}/${row.maxMarks?.toInt() ?: "-"} " +
+                                "(${row.grade.ifBlank { "-" }})",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                Text("Expenses — ${selectedChild!!.fullName}", style = MaterialTheme.typography.titleSmall)
+                if (expensePreview.isEmpty()) {
+                    Text("No expenses recorded yet.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    expensePreview.forEach { row ->
+                        Text(
+                            "${row.expenseDate.ifBlank { "-" }} · ${row.categoryName} — Rs. %,.2f".format(row.amount),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            }
+
             Text("Teacher Effectiveness Report", style = MaterialTheme.typography.titleMedium)
             EntityDropdownField(
-                "Teacher", teachers, selectedTeacher?.name ?: "", { it.name }, { selectedTeacher = it },
+                "Teacher", teachers, selectedTeacher?.name ?: "", { it.name },
+                { selectedTeacher = it; viewModel.loadTeacherPreview(it.id) },
                 modifier = Modifier.fillMaxWidth(),
             )
             Button(
@@ -90,8 +127,23 @@ fun ReportsScreen(viewModel: ReportsViewModel, onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Teacher Effectiveness (PDF)") }
 
+            if (selectedTeacher != null) {
+                Text("Effectiveness — ${selectedTeacher!!.name}", style = MaterialTheme.typography.titleSmall)
+                if (teacherPreview.isEmpty()) {
+                    Text("No assigned marks yet.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    teacherPreview.forEach { row ->
+                        Text(
+                            "${row.yearLabel}: avg ${row.avgPercentage?.let { "%.1f%%".format(it) } ?: "-"} " +
+                                "across ${row.markCount} mark(s)",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+
             Text(
-                "Reports are saved to the app's private external storage folder.",
+                "PDF/CSV exports are saved to the app's private external storage folder.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -70,4 +70,6 @@ dependencies {
 
     // Camera capture (system camera app via intent) + gallery/file picking
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+
+    testImplementation("junit:junit:4.13.2")
 }

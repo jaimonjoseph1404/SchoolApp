@@ -17,6 +17,8 @@ import org.familytools.educationtracker.data.Expense
 import org.familytools.educationtracker.data.ExpenseCategory
 import org.familytools.educationtracker.data.ExpenseDao
 import org.familytools.educationtracker.data.ExpenseRow
+import org.familytools.educationtracker.data.FeeReceipt
+import org.familytools.educationtracker.services.ExtractedReceipt
 
 class ExpenseViewModel(
     private val expenseDao: ExpenseDao,
@@ -72,6 +74,33 @@ class ExpenseViewModel(
 
     fun deleteExpense(id: Long) {
         viewModelScope.launch { expenseDao.deleteExpense(id) }
+    }
+
+    /** Saves an expense + linked [FeeReceipt] straight from OCR output — the
+     * scanned-receipt counterpart of [addExpense], with no manual re-typing
+     * of amount/category/date required when the OCR parse succeeded. */
+    fun addExpenseFromReceipt(
+        childId: Long, category: String, receipt: ExtractedReceipt, imagePath: String,
+        onDone: () -> Unit, onError: (String) -> Unit,
+    ) {
+        val amount = receipt.totalAmount
+        if (amount == null) { onError("Couldn't read an amount — enter it manually"); return }
+        viewModelScope.launch {
+            val categoryId = expenseDao.getOrCreateCategory(category.ifBlank { "Miscellaneous" })
+            val expenseId = expenseDao.insertExpense(
+                Expense(
+                    childId = childId, categoryId = categoryId, amount = amount,
+                    expenseDate = receipt.receiptDate, description = receipt.schoolName, receiptPath = imagePath,
+                ),
+            )
+            expenseDao.insertFeeReceipt(
+                FeeReceipt(
+                    expenseId = expenseId, schoolName = receipt.schoolName, receiptNumber = receipt.receiptNumber,
+                    receiptDate = receipt.receiptDate, amount = amount, totalAmount = amount, imagePath = imagePath,
+                ),
+            )
+            onDone()
+        }
     }
 
     companion object {

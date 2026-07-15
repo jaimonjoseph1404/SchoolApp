@@ -24,7 +24,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -38,67 +37,58 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
+import org.familytools.educationtracker.services.ExtractedReceipt
 import org.familytools.educationtracker.services.NameMatcher
 import org.familytools.educationtracker.services.OcrService
 import java.io.File
 
 @Composable
-fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
+fun ScanReceiptScreen(viewModel: ExpenseViewModel, onBack: () -> Unit) {
     val children by viewModel.children.collectAsState()
+    val categories by viewModel.categories.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    var selectedChildId by remember { mutableStateOf<Long?>(null) }
     var selectedChildName by remember { mutableStateOf("") }
-    var year by remember { mutableStateOf("") }
-    var className by remember { mutableStateOf("") }
-    var section by remember { mutableStateOf("") }
-    var term by remember { mutableStateOf("") }
-    var examType by remember { mutableStateOf("") }
-    var examDate by remember { mutableStateOf("") }
-    var rows by remember { mutableStateOf(listOf(MarkFormRow())) }
+    var category by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf("") }
+    var schoolName by remember { mutableStateOf("") }
+    var receiptNumber by remember { mutableStateOf("") }
+    var imagePath by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
 
     suspend fun runOcr(uri: Uri) {
         status = "Processing image..."
         try {
+            imagePath = uri.toString()
             val text = OcrService.extractText(context, uri)
-            val parsed = OcrService.parseProgressReport(text)
+            val receipt: ExtractedReceipt = OcrService.parseReceiptText(text)
 
-            val matchedChild = NameMatcher.findBestMatch(children, parsed.studentName)
+            val matchedChild = NameMatcher.findBestMatch(children, receipt.studentName)
             if (matchedChild != null) {
+                selectedChildId = matchedChild.id
                 selectedChildName = matchedChild.fullName
                 viewModel.selectChild(matchedChild.id)
             }
-            if (parsed.academicYear.isNotBlank()) year = parsed.academicYear
-            if (parsed.className.isNotBlank()) className = parsed.className
-            if (parsed.section.isNotBlank()) section = parsed.section
-            if (parsed.examType.isNotBlank()) { term = parsed.examType; examType = parsed.examType }
-            if (parsed.examDate.isNotBlank()) examDate = parsed.examDate
-
-            if (parsed.subjectRows.isNotEmpty()) {
-                rows = parsed.subjectRows.map {
-                    MarkFormRow(
-                        subject = it.subject,
-                        marksObtained = it.marksObtained?.toString() ?: "",
-                        maxMarks = it.maxMarks?.toString() ?: "",
-                        grade = it.grade,
-                        rank = it.rank?.toString() ?: "",
-                        remarks = it.remarks,
-                    )
-                }
-            }
+            schoolName = receipt.schoolName
+            receiptNumber = receipt.receiptNumber
+            if (receipt.receiptDate.isNotBlank()) date = receipt.receiptDate
+            if (receipt.totalAmount != null) amount = receipt.totalAmount.toString()
+            if (receipt.suggestedCategory.isNotBlank()) category = receipt.suggestedCategory
 
             val childNote = when {
                 matchedChild != null -> "Matched child: ${matchedChild.fullName}."
-                parsed.studentName.isNotBlank() -> "Couldn't match \"${parsed.studentName}\" to an enrolled child — select manually."
+                receipt.studentName.isNotBlank() -> "Couldn't match \"${receipt.studentName}\" — select the child manually."
                 else -> "Couldn't read a student name — select the child manually."
             }
-            status = if (parsed.subjectRows.isNotEmpty()) {
-                "$childNote Extracted ${parsed.subjectRows.size} subject row(s) — please verify before saving."
+            status = if (receipt.totalAmount != null) {
+                "$childNote Extracted amount ₹${receipt.totalAmount} — please verify before saving."
             } else {
-                "$childNote Couldn't automatically parse subject rows — please enter marks manually."
+                "$childNote Couldn't read an amount — please enter it manually."
             }
         } catch (e: Exception) {
             status = "OCR failed: ${e.message}"
@@ -114,7 +104,7 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
     }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
-            val file = File(context.cacheDir, "captures").apply { mkdirs() }.resolve("capture_${System.currentTimeMillis()}.jpg")
+            val file = File(context.cacheDir, "captures").apply { mkdirs() }.resolve("receipt_${System.currentTimeMillis()}.jpg")
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             pendingCameraUri = uri
             cameraLauncher.launch(uri)
@@ -126,7 +116,7 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Scan Report") },
+                title = { Text("Scan Fee Receipt") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") } },
             )
         },
@@ -138,30 +128,18 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
         ) {
             EntityDropdownField(
                 "Child", children, selectedChildName, { it.fullName },
-                { selectedChildName = it.fullName; viewModel.selectChild(it.id) },
+                { selectedChildId = it.id; selectedChildName = it.fullName; viewModel.selectChild(it.id) },
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Text("Exam Context", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(year, { year = it }, label = { Text("Academic Year *") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(className, { className = it }, label = { Text("Class *") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(section, { section = it }, label = { Text("Section") }, modifier = Modifier.weight(1f))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(term, { term = it }, label = { Text("Term *") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(examType, { examType = it }, label = { Text("Exam Type *") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(examDate, { examDate = it }, label = { Text("Exam Date") }, modifier = Modifier.weight(1f))
-            }
-
-            Text("Capture Report", style = MaterialTheme.typography.titleMedium)
+            Text("Capture Receipt", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
                     val granted = androidx.core.content.ContextCompat.checkSelfPermission(
                         context, android.Manifest.permission.CAMERA,
                     ) == PackageManager.PERMISSION_GRANTED
                     if (granted) {
-                        val file = File(context.cacheDir, "captures").apply { mkdirs() }.resolve("capture_${System.currentTimeMillis()}.jpg")
+                        val file = File(context.cacheDir, "captures").apply { mkdirs() }.resolve("receipt_${System.currentTimeMillis()}.jpg")
                         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                         pendingCameraUri = uri
                         cameraLauncher.launch(uri)
@@ -173,30 +151,37 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
             }
             if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Subjects & Marks (verify before saving)", style = MaterialTheme.typography.titleMedium)
-                TextButton(onClick = { rows = rows + MarkFormRow() }) { Text("+ Add Row") }
-            }
-            MarksTableEditor(
-                rows = rows,
-                onRowChange = { i, r -> rows = rows.toMutableList().also { it[i] = r } },
-                onRemoveRow = { i -> rows = rows.toMutableList().also { it.removeAt(i) } },
-            )
+            Text("Receipt Details (verify before saving)", style = MaterialTheme.typography.titleMedium)
+            EntityDropdownField("Category", categories.map { it.name }, category, { it }, { category = it }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(amount, { amount = it.filter { c -> c.isDigit() || c == '.' } }, label = { Text("Amount *") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(date, { date = it }, label = { Text("Date") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(schoolName, { schoolName = it }, label = { Text("School / Description") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(receiptNumber, { receiptNumber = it }, label = { Text("Receipt Number") }, modifier = Modifier.fillMaxWidth())
 
             Button(
                 onClick = {
-                    viewModel.saveExam(
-                        year, className, section, term, examType, examDate, rows,
+                    val childId = selectedChildId
+                    if (childId == null) {
+                        scope.launch { snackbarHostState.showSnackbar("Select a child first") }
+                        return@Button
+                    }
+                    viewModel.addExpenseFromReceipt(
+                        childId = childId,
+                        category = category,
+                        receipt = ExtractedReceipt(
+                            schoolName = schoolName, receiptNumber = receiptNumber, receiptDate = date,
+                            totalAmount = amount.toDoubleOrNull(),
+                        ),
+                        imagePath = imagePath,
                         onDone = {
-                            rows = listOf(MarkFormRow())
-                            status = ""
-                            scope.launch { snackbarHostState.showSnackbar("Report saved") }
+                            amount = ""; date = ""; schoolName = ""; receiptNumber = ""; status = ""
+                            scope.launch { snackbarHostState.showSnackbar("Expense saved from receipt") }
                         },
                         onError = { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } },
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Save Report") }
+            ) { Text("Save Expense") }
         }
     }
 }

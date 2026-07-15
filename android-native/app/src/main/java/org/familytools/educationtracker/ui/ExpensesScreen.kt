@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
@@ -33,7 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun ExpensesScreen(viewModel: ExpenseViewModel, onBack: () -> Unit) {
+fun ExpensesScreen(viewModel: ExpenseViewModel, onBack: () -> Unit, onScanReceipt: () -> Unit) {
     val children by viewModel.children.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val expenses by viewModel.expenses.collectAsState()
@@ -48,6 +49,9 @@ fun ExpensesScreen(viewModel: ExpenseViewModel, onBack: () -> Unit) {
             TopAppBar(
                 title = { Text("Expenses") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") } },
+                actions = {
+                    IconButton(onClick = onScanReceipt) { Icon(Icons.Filled.CameraAlt, contentDescription = "Scan Receipt") }
+                },
             )
         },
         floatingActionButton = {

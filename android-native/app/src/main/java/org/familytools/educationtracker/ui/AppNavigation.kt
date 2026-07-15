@@ -89,7 +89,14 @@ fun AppNavigation(viewModels: AppViewModels, startLocked: Boolean) {
             )
         }
         composable("expenses") {
-            ExpensesScreen(viewModels.expense, onBack = { navController.popBackStack() })
+            ExpensesScreen(
+                viewModels.expense,
+                onBack = { navController.popBackStack() },
+                onScanReceipt = { navController.navigate("scan_receipt") },
+            )
+        }
+        composable("scan_receipt") {
+            ScanReceiptScreen(viewModels.expense, onBack = { navController.popBackStack() })
         }
         composable("analytics") {
             AnalyticsScreen(viewModels.analytics, onBack = { navController.popBackStack() })
