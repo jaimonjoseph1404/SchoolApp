@@ -24,6 +24,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -59,14 +60,17 @@ fun ScanReceiptScreen(viewModel: ExpenseViewModel, onBack: () -> Unit) {
     var receiptNumber by remember { mutableStateOf("") }
     var imagePath by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
+    var rawText by remember { mutableStateOf("") }
+    var showRawText by remember { mutableStateOf(false) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
 
     suspend fun runOcr(uri: Uri) {
         status = "Processing image..."
         try {
             imagePath = uri.toString()
-            val text = OcrService.extractText(context, uri)
-            val receipt: ExtractedReceipt = OcrService.parseReceiptText(text)
+            val ocr = OcrService.recognize(context, uri)
+            rawText = ocr.fullText
+            val receipt: ExtractedReceipt = OcrService.parseReceiptText(ocr.fullText)
 
             val matchedChild = NameMatcher.findBestMatch(children, receipt.studentName)
             if (matchedChild != null) {
@@ -150,6 +154,19 @@ fun ScanReceiptScreen(viewModel: ExpenseViewModel, onBack: () -> Unit) {
                 Button(onClick = { galleryLauncher.launch("image/*") }) { Text("Gallery") }
             }
             if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (rawText.isNotEmpty()) {
+                TextButton(onClick = { showRawText = !showRawText }) {
+                    Text(if (showRawText) "Hide raw OCR text" else "Show raw OCR text")
+                }
+                if (showRawText) {
+                    Text(
+                        rawText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    )
+                }
+            }
 
             Text("Receipt Details (verify before saving)", style = MaterialTheme.typography.titleMedium)
             EntityDropdownField("Category", categories.map { it.name }, category, { it }, { category = it }, modifier = Modifier.fillMaxWidth())

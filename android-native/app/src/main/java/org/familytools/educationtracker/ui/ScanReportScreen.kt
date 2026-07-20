@@ -58,13 +58,16 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
     var examDate by remember { mutableStateOf("") }
     var rows by remember { mutableStateOf(listOf(MarkFormRow())) }
     var status by remember { mutableStateOf("") }
+    var rawText by remember { mutableStateOf("") }
+    var showRawText by remember { mutableStateOf(false) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
 
     suspend fun runOcr(uri: Uri) {
         status = "Processing image..."
         try {
-            val text = OcrService.extractText(context, uri)
-            val parsed = OcrService.parseProgressReport(text)
+            val ocr = OcrService.recognize(context, uri)
+            rawText = ocr.fullText
+            val parsed = OcrService.parseProgressReport(ocr.fullText, ocr.rows)
 
             val matchedChild = NameMatcher.findBestMatch(children, parsed.studentName)
             if (matchedChild != null) {
@@ -172,6 +175,19 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
                 Button(onClick = { galleryLauncher.launch("image/*") }) { Text("Gallery") }
             }
             if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (rawText.isNotEmpty()) {
+                TextButton(onClick = { showRawText = !showRawText }) {
+                    Text(if (showRawText) "Hide raw OCR text" else "Show raw OCR text")
+                }
+                if (showRawText) {
+                    Text(
+                        rawText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    )
+                }
+            }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Subjects & Marks (verify before saving)", style = MaterialTheme.typography.titleMedium)

@@ -101,6 +101,56 @@ class OcrServiceTest {
     }
 
     @Test
+    fun `strips table-border pipe characters before parsing a subject row`() {
+        val row = "| 1 | English - I | Theory | 100 | 40 | 55 | 55 | C |"
+        val parsed = OcrService.parseReportText(row)
+        assertEquals(1, parsed.size)
+        assertEquals("English - I", parsed[0].subject)
+        assertEquals(55.0, parsed[0].marksObtained)
+        assertEquals("C", parsed[0].grade)
+    }
+
+    @Test
+    fun `accepts CBSE-style two-character grades like A1 and B2`() {
+        val row = "1 Mathematics 100 40 92 92 A1"
+        val parsed = OcrService.parseReportText(row)
+        assertEquals(1, parsed.size)
+        assertEquals("A1", parsed[0].grade)
+    }
+
+    @Test
+    fun `does not reject a subject name containing a stray OCR'd digit`() {
+        val row = "3 S0cial Studies 100 40 50 50 C"
+        val parsed = OcrService.parseReportText(row)
+        assertEquals(1, parsed.size)
+        assertEquals("S0cial Studies", parsed[0].subject)
+    }
+
+    @Test
+    fun `recognizes alternate student-name labels`() {
+        val text = "Name of the Student : ARTHUR JAIMON\nClass V - E"
+        val parsed = OcrService.parseProgressReport(text)
+        assertEquals("ARTHUR JAIMON", parsed.studentName)
+    }
+
+    @Test
+    fun `prefers layout-reconstructed rows when they find more subjects than the flat text`() {
+        // Simulates ML Kit splitting one visual table row across two text
+        // lines (a real, common failure mode for photographed tables) —
+        // the flat text alone can't recover the row, but a bounding-box
+        // reconstruction (passed here as layoutRows) can.
+        val brokenFlatText = "1 English - I Theory\n100 40 55 55 C"
+        val reconstructedRows = listOf("1 English - I Theory 100 40 55 55 C")
+
+        val fromFlatTextOnly = OcrService.parseProgressReport(brokenFlatText)
+        assertEquals(0, fromFlatTextOnly.subjectRows.size)
+
+        val fromLayout = OcrService.parseProgressReport(brokenFlatText, reconstructedRows)
+        assertEquals(1, fromLayout.subjectRows.size)
+        assertEquals("English - I", fromLayout.subjectRows[0].subject)
+    }
+
+    @Test
     fun `parseReceiptText extracts amount, date and suggests a category`() {
         val text = """
             Auxilium School Fee Receipt

@@ -3,9 +3,11 @@ package org.familytools.educationtracker.services
 import android.content.Context
 import android.net.Uri
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.tasks.await
+import kotlin.math.abs
 
 data class ExtractedMarkRow(
     val subject: String,
@@ -39,17 +41,22 @@ data class ExtractedReceipt(
     val suggestedCategory: String = "",
 )
 
+/** Raw OCR output: [fullText] is ML Kit's own line grouping (used for
+ * one-line header fields like "Student Name ..."); [rows] are lines
+ * reconstructed by Y-coordinate proximity across the whole page, which is
+ * far more reliable for table rows — ML Kit frequently splits a single
+ * visual table row into multiple text lines when column gaps are wide
+ * (very common in photographed report cards), which silently defeated the
+ * old line-by-line parser. [fullText] is also surfaced in the UI so a
+ * user (or a future debugging session) can see exactly what was read when
+ * parsing doesn't match what's on the page. */
+data class OcrResult(val fullText: String, val rows: List<String>)
+
 /**
  * On-device OCR via Google ML Kit — replaces Tesseract from the Kivy build,
  * which had no working Android recipe. No native binary to bundle, and
  * ML Kit's Latin text model ships as part of the app / is fetched once by
  * Play Services, so this works fully offline after first use.
- *
- * Parsing works off the flattened recognized text (not per-block bounding
- * boxes) since ML Kit already groups OCR output into visual lines that
- * follow a photographed table's rows closely enough for regex/token
- * parsing — layout-aware column reconstruction isn't needed for the
- * report-card and receipt formats this targets.
  */
 object OcrService {
     // Lazy: constructing the ML Kit client touches Android runtime classes,
@@ -57,10 +64,40 @@ object OcrService {
     // parsing functions below the moment anything on this object is touched.
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
 
-    suspend fun extractText(context: Context, uri: Uri): String {
+    suspend fun recognize(context: Context, uri: Uri): OcrResult {
         val image = InputImage.fromFilePath(context, uri)
         val result = recognizer.process(image).await()
-        return result.text
+        return OcrResult(fullText = result.text, rows = reconstructRows(result))
+    }
+
+    suspend fun extractText(context: Context, uri: Uri): String = recognize(context, uri).fullText
+
+    /** Groups ML Kit's recognized lines into visual rows by vertical-center
+     * proximity (within ~60% of the row's average line height), then sorts
+     * each group left-to-right — reconstructing table rows regardless of
+     * how ML Kit itself chose to split the page into text lines. */
+    private fun reconstructRows(text: Text): List<String> {
+        data class LineBox(val content: String, val top: Int, val bottom: Int, val left: Int)
+
+        val lines = text.textBlocks.flatMap { it.lines }
+            .mapNotNull { line ->
+                val box = line.boundingBox ?: return@mapNotNull null
+                LineBox(line.text, box.top, box.bottom, box.left)
+            }
+            .sortedBy { it.top }
+        if (lines.isEmpty()) return emptyList()
+
+        val rows = mutableListOf<MutableList<LineBox>>()
+        for (line in lines) {
+            val lineCenter = (line.top + line.bottom) / 2.0
+            val targetRow = rows.lastOrNull()?.takeIf { candidate ->
+                val rowCenter = candidate.sumOf { (it.top + it.bottom) / 2.0 } / candidate.size
+                val avgHeight = candidate.sumOf { it.bottom - it.top } / candidate.size
+                abs(lineCenter - rowCenter) <= avgHeight * 0.6
+            }
+            if (targetRow != null) targetRow.add(line) else rows.add(mutableListOf(line))
+        }
+        return rows.map { row -> row.sortedBy { it.left }.joinToString(" ") { it.content } }
     }
 
     // --- Shared field extraction -------------------------------------------------
@@ -85,22 +122,32 @@ object OcrService {
         return regex.find(text)?.groupValues?.get(1)?.trim(' ', ':', '-')?.trim().orEmpty()
     }
 
-    private fun extractStudentName(text: String): String = captureField(text, "Student\\s*Name")
+    private val studentNameLabel =
+        "(?:Student\\s*Name|Name\\s*of\\s*(?:the\\s*)?(?:Student|Candidate|Pupil)|Candidate\\s*Name|Pupil'?s?\\s*Name)"
+
+    private fun extractStudentName(text: String): String = captureField(text, studentNameLabel)
 
     // --- Progress report parsing --------------------------------------------------
 
-    private val gradeToken = Regex("^[A-Fa-f][+-]?$")
+    // CBSE-style grades (A1, B2, ...) as well as plain letter grades (A, C+, F, ...).
+    private val gradeToken = Regex("^[A-Fa-f][12+-]?$")
     private val numberToken = Regex("^\\d{1,3}(?:\\.\\d+)?$")
     private val skipTrailingWords = setOf("THEORY", "PRACTICAL", "TH", "PR", "PRAC")
     private val nonSubjectLineStarts = setOf("TOTAL", "S.NO", "SNO", "PART-I", "PART-II", "PART")
 
-    private fun parseSubjectRow(line: String): ExtractedMarkRow? {
-        val raw = line.trim()
+    /** Strips characters real photographed-table OCR frequently injects
+     * around cell contents (border pipes, stray punctuation) without
+     * touching the letters/digits/spaces parsing depends on. */
+    private fun cleanRow(line: String): String =
+        line.replace('|', ' ').replace('¦', ' ').replace(Regex("[_~`]"), " ").trim()
+
+    private fun parseSubjectRow(rawLine: String): ExtractedMarkRow? {
+        val raw = cleanRow(rawLine)
         if (raw.isEmpty()) return null
         val upperFirst = raw.uppercase()
         if (nonSubjectLineStarts.any { upperFirst.startsWith(it) }) return null
 
-        val tokens = raw.split(Regex("\\s+")).toMutableList()
+        val tokens = raw.split(Regex("\\s+")).filter { it.isNotBlank() }.toMutableList()
         if (tokens.size < 3) return null
 
         var grade = ""
@@ -114,14 +161,16 @@ object OcrService {
         }
         if (numbers.isEmpty()) return null
 
-        if (tokens.isNotEmpty() && tokens.first().matches(Regex("^\\d{1,2}$"))) {
+        if (tokens.isNotEmpty() && tokens.first().matches(Regex("^\\d{1,2}[.)]?$"))) {
             tokens.removeAt(0)
         }
-        while (tokens.isNotEmpty() && tokens.last().uppercase() in skipTrailingWords) {
+        while (tokens.isNotEmpty() && tokens.last().uppercase().trim('.') in skipTrailingWords) {
             tokens.removeAt(tokens.size - 1)
         }
         val subject = tokens.joinToString(" ").trim()
-        if (subject.length < 2 || subject.any { it.isDigit() }) return null
+        // Reject only genuine junk (no letters at all) — a stray OCR'd digit
+        // inside an otherwise valid subject name shouldn't drop the whole row.
+        if (subject.length < 2 || subject.none { it.isLetter() }) return null
 
         val max: Double?
         val min: Double?
@@ -160,7 +209,12 @@ object OcrService {
     fun parseReportText(text: String): List<ExtractedMarkRow> =
         text.lines().mapNotNull { parseSubjectRow(it) }
 
-    fun parseProgressReport(text: String): ParsedReportCard {
+    /** [layoutRows], when supplied by [recognize], reconstructs table rows
+     * from bounding boxes rather than trusting ML Kit's own line breaks —
+     * pass [OcrResult.rows] here for real scans. Defaults to a plain line
+     * split so pure-text callers (tests, previously-extracted text) still
+     * work without layout information. */
+    fun parseProgressReport(text: String, layoutRows: List<String> = text.lines()): ParsedReportCard {
         val studentName = extractStudentName(text)
         val registerNo = captureField(text, "Regi?ster\\s*No\\.?")
 
@@ -202,7 +256,12 @@ object OcrService {
             if (idx in 0 until lines.size - 1) teacherRemarks = lines[idx + 1]
         }
 
-        val subjectRows = parseReportText(text)
+        // Layout-reconstructed rows catch table rows ML Kit split across
+        // multiple lines; fall back to (and merge with) the plain-text
+        // parse in case reconstruction missed a row the flat text still has.
+        val fromLayout = layoutRows.mapNotNull { parseSubjectRow(it) }
+        val fromFlatText = parseReportText(text)
+        val subjectRows = if (fromLayout.size >= fromFlatText.size) fromLayout else fromFlatText
 
         return ParsedReportCard(
             studentName = studentName,
