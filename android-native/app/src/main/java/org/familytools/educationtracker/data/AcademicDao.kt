@@ -68,9 +68,54 @@ interface AcademicDao {
     @Insert
     suspend fun insertExam(exam: Exam): Long
 
-    suspend fun getOrCreateExam(termId: Long, examType: String, examDate: String = ""): Long =
-        findExam(termId, examType.trim())
-            ?: insertExam(Exam(termId = termId, examType = examType.trim(), examDate = examDate.trim()))
+    @Query(
+        "UPDATE exams SET examDate = :examDate, attendanceDaysPresent = :attendanceDaysPresent, " +
+            "attendanceWorkingDays = :attendanceWorkingDays, teacherRemarks = :teacherRemarks WHERE id = :id",
+    )
+    suspend fun updateExamDetails(
+        id: Long, examDate: String, attendanceDaysPresent: Int?, attendanceWorkingDays: Int?, teacherRemarks: String,
+    )
+
+    suspend fun getOrCreateExam(
+        termId: Long, examType: String, examDate: String = "",
+        attendanceDaysPresent: Int? = null, attendanceWorkingDays: Int? = null, teacherRemarks: String = "",
+    ): Long {
+        val existing = findExam(termId, examType.trim())
+        return if (existing != null) {
+            updateExamDetails(existing, examDate.trim(), attendanceDaysPresent, attendanceWorkingDays, teacherRemarks.trim())
+            existing
+        } else {
+            insertExam(
+                Exam(
+                    termId = termId, examType = examType.trim(), examDate = examDate.trim(),
+                    attendanceDaysPresent = attendanceDaysPresent, attendanceWorkingDays = attendanceWorkingDays,
+                    teacherRemarks = teacherRemarks.trim(),
+                ),
+            )
+        }
+    }
+
+    /** Pure lookup (no creation) across the full child->year->class->term->exam
+     * hierarchy by literal label values — used to detect "this report was
+     * already scanned" before [getOrCreateExam] would otherwise silently
+     * create-or-reuse the row. */
+    @Query(
+        """
+        SELECT e.id FROM exams e
+        JOIN terms t ON t.id = e.termId
+        JOIN classes c ON c.id = t.classId
+        JOIN academic_years ay ON ay.id = c.academicYearId
+        WHERE ay.childId = :childId AND ay.yearLabel = :yearLabel AND c.className = :className
+          AND c.section = :section AND t.termName = :termName AND e.examType = :examType
+        LIMIT 1
+        """,
+    )
+    suspend fun findExamExact(
+        childId: Long, yearLabel: String, className: String, section: String, termName: String, examType: String,
+    ): Long?
+
+    @Query("SELECT COUNT(*) FROM marks WHERE examId = :examId")
+    suspend fun markCountForExam(examId: Long): Int
 
     // --- Marks ---
     @Query("SELECT id FROM marks WHERE examId = :examId AND subjectId = :subjectId LIMIT 1")
@@ -115,7 +160,9 @@ interface AcademicDao {
         SELECT ay.yearLabel as yearLabel, c.className as className, t.termName as termName,
                e.examType as examType, e.examDate as examDate, s.name as subjectName,
                m.marksObtained as marksObtained, m.maxMarks as maxMarks, m.grade as grade,
-               m.percentage as percentage, m.rank as rank, m.remarks as remarks
+               m.percentage as percentage, m.rank as rank, m.remarks as remarks,
+               e.attendanceDaysPresent as attendanceDaysPresent, e.attendanceWorkingDays as attendanceWorkingDays,
+               e.teacherRemarks as teacherRemarks
         FROM marks m
         JOIN exams e ON e.id = m.examId
         JOIN terms t ON t.id = e.termId

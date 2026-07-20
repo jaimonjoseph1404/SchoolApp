@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         Exam::class, Mark::class, Teacher::class, TeacherAssignment::class, ExpenseCategory::class,
         Expense::class, FeeReceipt::class, OcrHistoryEntry::class, BackupRecord::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

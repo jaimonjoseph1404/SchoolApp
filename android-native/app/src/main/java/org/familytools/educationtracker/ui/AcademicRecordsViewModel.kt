@@ -12,14 +12,16 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.familytools.educationtracker.data.AcademicDao
+import org.familytools.educationtracker.data.Child
 import org.familytools.educationtracker.data.ChildDao
 import org.familytools.educationtracker.data.MarkHistoryRow
+import org.familytools.educationtracker.services.NameMatcher
 
 class AcademicRecordsViewModel(
     private val childDao: ChildDao,
     private val academicDao: AcademicDao,
 ) : ViewModel() {
-    val children: StateFlow<List<org.familytools.educationtracker.data.Child>> = childDao.observeAll()
+    val children: StateFlow<List<Child>> = childDao.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedChildId = MutableStateFlow<Long?>(null)
@@ -34,10 +36,31 @@ class AcademicRecordsViewModel(
         _selectedChildId.value = id
     }
 
+    /** Finds an enrolled child by (fuzzy) name match, or creates one on the
+     * spot — lets a progress-report scan onboard a brand-new child without
+     * a separate "Add Child" trip when the OCR'd name doesn't match anyone
+     * already enrolled. */
+    suspend fun findOrCreateChildByName(
+        name: String, schoolName: String, admissionNumber: String,
+        currentClass: String, section: String, academicYear: String,
+    ): Child {
+        NameMatcher.findBestMatch(children.value, name)?.let { return it }
+        val id = childDao.upsert(
+            Child(
+                fullName = name.trim(), schoolName = schoolName, admissionNumber = admissionNumber,
+                currentClass = currentClass, section = section, academicYear = academicYear,
+            ),
+        )
+        return childDao.getById(id) ?: error("Failed to create child")
+    }
+
     fun saveExam(
         yearLabel: String, className: String, section: String, termName: String,
         examType: String, examDate: String, rows: List<MarkFormRow>,
-        onDone: () -> Unit, onError: (String) -> Unit,
+        coCurricularRows: List<MarkFormRow> = emptyList(),
+        attendanceDaysPresent: Int? = null, attendanceWorkingDays: Int? = null, teacherRemarks: String = "",
+        force: Boolean = false,
+        onDone: () -> Unit, onError: (String) -> Unit, onDuplicate: () -> Unit = {},
     ) {
         val childId = _selectedChildId.value
         if (childId == null) {
@@ -49,16 +72,28 @@ class AcademicRecordsViewModel(
             return
         }
         val validRows = rows.filter { it.subject.isNotBlank() }
-        if (validRows.isEmpty()) {
+        val validCoCurricular = coCurricularRows.filter { it.subject.isNotBlank() }
+        if (validRows.isEmpty() && validCoCurricular.isEmpty()) {
             onError("Add at least one subject with marks")
             return
         }
         viewModelScope.launch {
+            if (!force) {
+                val existingExamId = academicDao.findExamExact(
+                    childId, yearLabel.trim(), className.trim(), section.trim(), termName.trim(), examType.trim(),
+                )
+                if (existingExamId != null && academicDao.markCountForExam(existingExamId) > 0) {
+                    onDuplicate()
+                    return@launch
+                }
+            }
             val yearId = academicDao.getOrCreateAcademicYear(childId, yearLabel)
             val classId = academicDao.getOrCreateClass(yearId, className, section)
             val termId = academicDao.getOrCreateTerm(classId, termName)
-            val examId = academicDao.getOrCreateExam(termId, examType, examDate)
-            for (row in validRows) {
+            val examId = academicDao.getOrCreateExam(
+                termId, examType, examDate, attendanceDaysPresent, attendanceWorkingDays, teacherRemarks,
+            )
+            for (row in validRows + validCoCurricular) {
                 academicDao.addOrUpdateMark(
                     examId, row.subject,
                     row.marksObtained.toDoubleOrNull(), row.maxMarks.toDoubleOrNull(),

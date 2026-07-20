@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,11 +57,36 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
     var term by remember { mutableStateOf("") }
     var examType by remember { mutableStateOf("") }
     var examDate by remember { mutableStateOf("") }
+    var daysPresent by remember { mutableStateOf("") }
+    var workingDays by remember { mutableStateOf("") }
+    var teacherRemarksText by remember { mutableStateOf("") }
     var rows by remember { mutableStateOf(listOf(MarkFormRow())) }
+    var coCurricularRows by remember { mutableStateOf(listOf<MarkFormRow>()) }
     var status by remember { mutableStateOf("") }
     var rawText by remember { mutableStateOf("") }
     var showRawText by remember { mutableStateOf(false) }
+    var showDuplicateDialog by remember { mutableStateOf(false) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    fun doSave(force: Boolean) {
+        viewModel.saveExam(
+            year, className, section, term, examType, examDate, rows,
+            coCurricularRows = coCurricularRows,
+            attendanceDaysPresent = daysPresent.toIntOrNull(),
+            attendanceWorkingDays = workingDays.toIntOrNull(),
+            teacherRemarks = teacherRemarksText,
+            force = force,
+            onDone = {
+                rows = listOf(MarkFormRow())
+                coCurricularRows = emptyList()
+                status = ""
+                showDuplicateDialog = false
+                scope.launch { snackbarHostState.showSnackbar("Report saved") }
+            },
+            onError = { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } },
+            onDuplicate = { showDuplicateDialog = true },
+        )
+    }
 
     suspend fun runOcr(uri: Uri) {
         status = "Processing image..."
@@ -69,7 +95,19 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
             rawText = ocr.fullText
             val parsed = OcrService.parseProgressReport(ocr.fullText, ocr.rows)
 
-            val matchedChild = NameMatcher.findBestMatch(children, parsed.studentName)
+            var matchedChild = NameMatcher.findBestMatch(children, parsed.studentName)
+            var createdNewChild = false
+            if (matchedChild == null && parsed.studentName.isNotBlank()) {
+                matchedChild = viewModel.findOrCreateChildByName(
+                    name = parsed.studentName,
+                    schoolName = parsed.schoolName,
+                    admissionNumber = parsed.registerNo,
+                    currentClass = parsed.className,
+                    section = parsed.section,
+                    academicYear = parsed.academicYear,
+                )
+                createdNewChild = true
+            }
             if (matchedChild != null) {
                 selectedChildName = matchedChild.fullName
                 viewModel.selectChild(matchedChild.id)
@@ -79,6 +117,9 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
             if (parsed.section.isNotBlank()) section = parsed.section
             if (parsed.examType.isNotBlank()) { term = parsed.examType; examType = parsed.examType }
             if (parsed.examDate.isNotBlank()) examDate = parsed.examDate
+            if (parsed.attendanceDaysPresent != null) daysPresent = parsed.attendanceDaysPresent.toString()
+            if (parsed.attendanceWorkingDays != null) workingDays = parsed.attendanceWorkingDays.toString()
+            if (parsed.teacherRemarks.isNotBlank()) teacherRemarksText = parsed.teacherRemarks
 
             if (parsed.subjectRows.isNotEmpty()) {
                 rows = parsed.subjectRows.map {
@@ -92,8 +133,14 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
                     )
                 }
             }
+            if (parsed.coCurricularRows.isNotEmpty()) {
+                coCurricularRows = parsed.coCurricularRows.map {
+                    MarkFormRow(subject = it.subject, grade = it.grade)
+                }
+            }
 
             val childNote = when {
+                createdNewChild -> "Added new child: ${matchedChild?.fullName}."
                 matchedChild != null -> "Matched child: ${matchedChild.fullName}."
                 parsed.studentName.isNotBlank() -> "Couldn't match \"${parsed.studentName}\" to an enrolled child — select manually."
                 else -> "Couldn't read a student name — select the child manually."
@@ -156,6 +203,20 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
                 OutlinedTextField(examType, { examType = it }, label = { Text("Exam Type *") }, modifier = Modifier.weight(1f))
                 OutlinedTextField(examDate, { examDate = it }, label = { Text("Exam Date") }, modifier = Modifier.weight(1f))
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    daysPresent, { daysPresent = it.filter { c -> c.isDigit() } },
+                    label = { Text("Days Present") }, modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    workingDays, { workingDays = it.filter { c -> c.isDigit() } },
+                    label = { Text("Working Days") }, modifier = Modifier.weight(1f),
+                )
+            }
+            OutlinedTextField(
+                teacherRemarksText, { teacherRemarksText = it },
+                label = { Text("Teacher's Remarks") }, modifier = Modifier.fillMaxWidth(),
+            )
 
             Text("Capture Report", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -199,20 +260,32 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
                 onRemoveRow = { i -> rows = rows.toMutableList().also { it.removeAt(i) } },
             )
 
-            Button(
-                onClick = {
-                    viewModel.saveExam(
-                        year, className, section, term, examType, examDate, rows,
-                        onDone = {
-                            rows = listOf(MarkFormRow())
-                            status = ""
-                            scope.launch { snackbarHostState.showSnackbar("Report saved") }
-                        },
-                        onError = { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } },
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Save Report") }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Co-Curricular Activities & Character Traits", style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = { coCurricularRows = coCurricularRows + MarkFormRow() }) { Text("+ Add Row") }
+            }
+            MarksTableEditor(
+                rows = coCurricularRows,
+                onRowChange = { i, r -> coCurricularRows = coCurricularRows.toMutableList().also { it[i] = r } },
+                onRemoveRow = { i -> coCurricularRows = coCurricularRows.toMutableList().also { it.removeAt(i) } },
+            )
+
+            Button(onClick = { doSave(force = false) }, modifier = Modifier.fillMaxWidth()) { Text("Save Report") }
         }
+    }
+
+    if (showDuplicateDialog) {
+        AlertDialog(
+            onDismissRequest = { showDuplicateDialog = false },
+            title = { Text("Report already scanned") },
+            text = {
+                Text(
+                    "A report for $selectedChildName — $year, $className${if (section.isNotBlank()) " - $section" else ""}, " +
+                        "$term / $examType already has marks recorded. Save anyway to update it?",
+                )
+            },
+            confirmButton = { TextButton(onClick = { doSave(force = true) }) { Text("Save Anyway") } },
+            dismissButton = { TextButton(onClick = { showDuplicateDialog = false }) { Text("Cancel") } },
+        )
     }
 }

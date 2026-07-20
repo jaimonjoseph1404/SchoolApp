@@ -68,9 +68,52 @@ class OcrServiceTest {
     }
 
     @Test
-    fun `extracts attendance`() {
+    fun `extracts attendance as separate days-present and working-days fields`() {
         val parsed = OcrService.parseProgressReport(sampleReportText)
-        assertEquals("121/126", parsed.attendance)
+        assertEquals(121, parsed.attendanceDaysPresent)
+        assertEquals(126, parsed.attendanceWorkingDays)
+    }
+
+    @Test
+    fun `extracts school name and address from the header block`() {
+        val parsed = OcrService.parseProgressReport(sampleReportText)
+        assertEquals("AUXILIUM SCHOOL(ICSE) KA098", parsed.schoolName)
+        assertTrue(parsed.schoolAddress.contains("Bandapura Village"))
+    }
+
+    @Test
+    fun `extracts all ten Part-II co-curricular activity and character-trait ratings`() {
+        val parsed = OcrService.parseProgressReport(sampleReportText)
+        assertEquals(10, parsed.coCurricularRows.size)
+
+        val games = parsed.coCurricularRows.first { it.subject == "PT / Games" }
+        assertEquals("A", games.grade)
+        val leadership = parsed.coCurricularRows.first { it.subject == "Leadership" }
+        assertEquals("C", leadership.grade)
+
+        // Legend entries ("A: Excellent", "C: Fair", ...) must not appear as rows.
+        assertTrue(parsed.coCurricularRows.none { it.subject.equals("Excellent", ignoreCase = true) })
+        assertTrue(parsed.coCurricularRows.none { it.subject.equals("Fair", ignoreCase = true) })
+    }
+
+    @Test
+    fun `does not let an unrelated number elsewhere on the page pollute the class field`() {
+        // Regression: a real scan matched "36" (from unrelated page content)
+        // as the class instead of "III - C" once "Class" appeared anywhere
+        // in the whole OCR blob. Header-scoping + a strict roman-numeral or
+        // 1-12 digit pattern (not "any 1-4 digit/roman run") fixes it.
+        val text = """
+            Progress Report : ANNUAL EXAMINATION - 2025-2026
+            Student Name JANE DOE Class III - C
+            Register No 55/2024-25
+            S.No Part-I Max Min Score Avg Grade
+            1 English 100 40 70 70 B
+            Total Working Days 36
+            Attendance 30/36
+        """.trimIndent()
+        val parsed = OcrService.parseProgressReport(text)
+        assertEquals("III", parsed.className)
+        assertEquals("C", parsed.section)
     }
 
     @Test

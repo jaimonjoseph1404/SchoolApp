@@ -22,14 +22,18 @@ data class ExtractedMarkRow(
 data class ParsedReportCard(
     val studentName: String = "",
     val registerNo: String = "",
+    val schoolName: String = "",
+    val schoolAddress: String = "",
     val className: String = "",
     val section: String = "",
     val academicYear: String = "",
     val examType: String = "",
     val examDate: String = "",
-    val attendance: String = "",
+    val attendanceDaysPresent: Int? = null,
+    val attendanceWorkingDays: Int? = null,
     val teacherRemarks: String = "",
     val subjectRows: List<ExtractedMarkRow> = emptyList(),
+    val coCurricularRows: List<ExtractedMarkRow> = emptyList(),
 )
 
 data class ExtractedReceipt(
@@ -209,30 +213,56 @@ object OcrService {
     fun parseReportText(text: String): List<ExtractedMarkRow> =
         text.lines().mapNotNull { parseSubjectRow(it) }
 
+    // Roman numerals I-XII, longest-first so alternation can't match a
+    // prefix (e.g. "I" inside "III") before trying the full token.
+    private const val ROMAN_CLASS = "VIII|VII|XII|III|XI|IV|IX|VI|II|X|V|I"
+    private val tableStartMarker = Regex("S\\.?\\s*No\\b|Part\\s*-?\\s*I\\b", RegexOption.IGNORE_CASE)
+    private val partTwoStartMarker = Regex("PART\\s*-?\\s*II\\b", RegexOption.IGNORE_CASE)
+
+    /** Text before the marks table starts (before "S.No"/"Part-I") — header
+     * fields (name, class, exam title) live here. Scoping to just this
+     * region stops those fields from accidentally matching unrelated
+     * numbers/words deeper in the marks table or the co-curricular section
+     * (e.g. an attendance count getting picked up as the class number). */
+    private fun headerText(text: String): String {
+        val end = tableStartMarker.find(text)?.range?.first ?: text.length
+        return text.substring(0, end)
+    }
+
     /** [layoutRows], when supplied by [recognize], reconstructs table rows
      * from bounding boxes rather than trusting ML Kit's own line breaks —
      * pass [OcrResult.rows] here for real scans. Defaults to a plain line
      * split so pure-text callers (tests, previously-extracted text) still
      * work without layout information. */
     fun parseProgressReport(text: String, layoutRows: List<String> = text.lines()): ParsedReportCard {
-        val studentName = extractStudentName(text)
-        val registerNo = captureField(text, "Regi?ster\\s*No\\.?")
+        val header = headerText(text)
+        val studentName = extractStudentName(header)
+        val registerNo = captureField(header, "Regi?ster\\s*No\\.?")
+
+        val preHeaderLines = header.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            .takeWhile { !Regex("Progress\\s*Report", RegexOption.IGNORE_CASE).containsMatchIn(it) }
+        val schoolName = preHeaderLines.firstOrNull { it.count { c -> c.isLetter() } >= 4 }.orEmpty()
+        val schoolAddress = preHeaderLines.filter { it != schoolName }.joinToString(", ")
 
         var className = ""
         var section = ""
-        Regex("Class\\s*[:\\-]?\\s*([IVXLCDM0-9]{1,4})\\s*-\\s*([A-Za-z0-9]{1,3})\\b", RegexOption.IGNORE_CASE)
-            .find(text)?.let {
-                className = it.groupValues[1].trim()
-                section = it.groupValues[2].trim()
-            }
+        Regex(
+            "Class\\s*[:\\-]?\\s*((?:$ROMAN_CLASS|1[0-2]|[1-9]))\\s*-\\s*([A-Za-z])\\b",
+            RegexOption.IGNORE_CASE,
+        ).find(header)?.let {
+            className = it.groupValues[1].trim()
+            section = it.groupValues[2].trim().uppercase()
+        }
         if (className.isEmpty()) {
-            Regex("Class\\s*[:\\-]?\\s*([IVXLCDM0-9]{1,4})\\b(?!\\s*Teacher)", RegexOption.IGNORE_CASE)
-                .find(text)?.let { className = it.groupValues[1].trim() }
+            Regex(
+                "Class\\s*[:\\-]?\\s*((?:$ROMAN_CLASS|1[0-2]|[1-9]))\\b(?!\\s*Teacher)",
+                RegexOption.IGNORE_CASE,
+            ).find(header)?.let { className = it.groupValues[1].trim() }
         }
 
         var examType = ""
         var academicYear = ""
-        Regex("Progress\\s*Report\\s*[:\\-]?\\s*(.+)", RegexOption.IGNORE_CASE).find(text)?.groupValues?.get(1)?.let { rest ->
+        Regex("Progress\\s*Report\\s*[:\\-]?\\s*(.+)", RegexOption.IGNORE_CASE).find(header)?.groupValues?.get(1)?.let { rest ->
             val trimmed = rest.trim()
             val yearSplit = Regex("^(.*?)\\s*-\\s*(\\d{4}(?:-\\d{2,4})?)$").find(trimmed)
             if (yearSplit != null) {
@@ -243,11 +273,12 @@ object OcrService {
             }
         }
         if (academicYear.isEmpty()) {
-            Regex("(\\d{4}\\s*-\\s*\\d{2,4})").find(text)?.let { academicYear = it.groupValues[1].replace(" ", "") }
+            Regex("(\\d{4}\\s*-\\s*\\d{2,4})").find(header)?.let { academicYear = it.groupValues[1].replace(" ", "") }
         }
 
-        val attendance = Regex("Attendance\\s*[:\\-]?\\s*(\\d+\\s*/\\s*\\d+)", RegexOption.IGNORE_CASE)
-            .find(text)?.groupValues?.get(1)?.replace(" ", "").orEmpty()
+        val attendanceMatch = Regex("Attendance\\s*[:\\-]?\\s*(\\d+)\\s*/\\s*(\\d+)", RegexOption.IGNORE_CASE).find(text)
+        val attendanceDaysPresent = attendanceMatch?.groupValues?.get(1)?.toIntOrNull()
+        val attendanceWorkingDays = attendanceMatch?.groupValues?.get(2)?.toIntOrNull()
 
         var teacherRemarks = captureField(text, "Teacher'?s?\\s*Remarks?", stopWords = emptyList())
         if (teacherRemarks.isEmpty()) {
@@ -263,17 +294,85 @@ object OcrService {
         val fromFlatText = parseReportText(text)
         val subjectRows = if (fromLayout.size >= fromFlatText.size) fromLayout else fromFlatText
 
+        val coCurricularRows = parseCoCurricularSection(text, layoutRows)
+
         return ParsedReportCard(
             studentName = studentName,
             registerNo = registerNo,
+            schoolName = schoolName,
+            schoolAddress = schoolAddress,
             className = className,
             section = section,
             academicYear = academicYear,
             examType = examType,
-            attendance = attendance,
+            attendanceDaysPresent = attendanceDaysPresent,
+            attendanceWorkingDays = attendanceWorkingDays,
             teacherRemarks = teacherRemarks,
             subjectRows = subjectRows,
+            coCurricularRows = coCurricularRows,
         )
+    }
+
+    // A "legend" token like "A:" (as in "A: Excellent") — marks a grading-key
+    // entry rather than an actual activity/trait rating and must be skipped.
+    private val legendToken = Regex("^[A-Fa-f]:$")
+    private val bareGradeToken = Regex("^[A-Fa-f]$")
+
+    private val partTwoEndMarker = Regex("Attendance\\b|Teacher'?s?\\s*Remarks?|Signature", RegexOption.IGNORE_CASE)
+
+    /** Best-effort parse of "PART - II Co-Curricular Activities and
+     * Character Traits" — a two-column grid of "<activity> <grade>
+     * <trait> <grade>" rows plus a grading-key legend ("A: Excellent",
+     * "B-Good", ...) mixed into the same lines. Scoped to the row-index
+     * range between the "PART - II" and "Attendance"/"Signature" markers
+     * within [layoutRows] — without that bound, any unrelated row that
+     * happens to end in a single stray A-F letter (e.g. a "... Total ... E"
+     * grade summary, or "Class V - E" itself) gets misread as an activity. */
+    private fun parseCoCurricularSection(text: String, layoutRows: List<String>): List<ExtractedMarkRow> {
+        if (!partTwoStartMarker.containsMatchIn(text)) return emptyList()
+        val startIdx = layoutRows.indexOfFirst { partTwoStartMarker.containsMatchIn(it) }
+        if (startIdx < 0) return emptyList()
+        val afterStart = layoutRows.drop(startIdx + 1)
+        val endOffset = afterStart.indexOfFirst { partTwoEndMarker.containsMatchIn(it) }
+        val endIdx = if (endOffset < 0) layoutRows.size else startIdx + 1 + endOffset
+
+        val candidateRows = layoutRows.subList((startIdx + 1).coerceAtMost(layoutRows.size), endIdx.coerceIn(0, layoutRows.size))
+            .filter { row -> parseSubjectRow(row) == null }
+
+        val results = mutableListOf<ExtractedMarkRow>()
+        for (rawRow in candidateRows) {
+            val tokens = cleanRow(rawRow).split(Regex("\\s+")).filter { it.isNotBlank() }.toMutableList()
+            var labelTokens = mutableListOf<String>()
+            var i = 0
+            while (i < tokens.size) {
+                val tok = tokens[i]
+                if (legendToken.matches(tok)) {
+                    // Skip the legend marker and its trailing word, e.g. "A: Excellent".
+                    i++
+                    if (i < tokens.size && tokens[i].all { it.isLetter() }) i++
+                    labelTokens = mutableListOf()
+                    continue
+                }
+                if (bareGradeToken.matches(tok) && labelTokens.isNotEmpty()) {
+                    val label = labelTokens.joinToString(" ").trim(',', '-', ':')
+                    if (label.length >= 2 && label.any { it.isLetter() } && label.uppercase() !in nonSubjectLineStarts) {
+                        results.add(
+                            ExtractedMarkRow(
+                                subject = label, marksObtained = null, maxMarks = null,
+                                grade = tok.uppercase(), percentage = null, rank = null, remarks = "",
+                            ),
+                        )
+                    }
+                    labelTokens = mutableListOf()
+                } else {
+                    labelTokens.add(tok)
+                }
+                i++
+            }
+        }
+        // De-duplicate (the candidate-row filter above can surface the same
+        // physical row via both the layout and flat-text passes).
+        return results.distinctBy { it.subject.uppercase() }
     }
 
     // --- Fee receipt parsing -------------------------------------------------------
