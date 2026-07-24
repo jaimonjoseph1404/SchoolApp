@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AcademicRecordsScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
     val children by viewModel.children.collectAsState()
+    val selectedChildId by viewModel.selectedChildId.collectAsState()
     val history by viewModel.marksHistory.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -85,8 +86,25 @@ fun AcademicRecordsScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Uni
                 OutlinedTextField(examDate, { examDate = it }, label = { Text("Exam Date") }, modifier = Modifier.weight(1f))
             }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Subjects & Marks", style = MaterialTheme.typography.titleMedium)
+            Text("Subjects & Marks", style = MaterialTheme.typography.titleMedium)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = {
+                    val childId = selectedChildId
+                    if (childId == null || className.isBlank()) {
+                        scope.launch { snackbarHostState.showSnackbar("Select a child and class first") }
+                    } else {
+                        scope.launch {
+                            val template = viewModel.getTemplate(childId, className, "SUBJECT")
+                            if (template.isEmpty()) {
+                                snackbarHostState.showSnackbar("No saved subjects for this class yet")
+                            } else {
+                                val present = rows.map { it.subject.trim().uppercase() }.toSet()
+                                val missing = template.filter { it.trim().uppercase() !in present }
+                                rows = rows.filter { it.subject.isNotBlank() } + missing.map { MarkFormRow(subject = it) }
+                            }
+                        }
+                    }
+                }) { Text("Use Template") }
                 TextButton(onClick = { rows = rows + MarkFormRow() }) { Text("+ Add Row") }
             }
             MarksTableEditor(

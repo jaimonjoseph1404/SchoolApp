@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,7 @@ import java.io.File
 @Composable
 fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
     val children by viewModel.children.collectAsState()
+    val selectedChildId by viewModel.selectedChildId.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -67,6 +69,40 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
     var showRawText by remember { mutableStateOf(false) }
     var showDuplicateDialog by remember { mutableStateOf(false) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var templateAutoLoaded by remember { mutableStateOf(false) }
+
+    // Adds any template subject/activity not already present as a blank row
+    // (marks left for the user to fill in) — used both to auto-complete an
+    // OCR pass that missed some subjects, and to pre-fill a fully manual
+    // entry once a child + class are known.
+    fun mergeWithTemplate(existing: List<MarkFormRow>, template: List<String>): List<MarkFormRow> {
+        if (template.isEmpty()) return existing
+        val present = existing.map { it.subject.trim().uppercase() }.toSet()
+        val missing = template.filter { it.trim().uppercase() !in present }
+        val base = existing.filter { it.subject.isNotBlank() }
+        return base + missing.map { MarkFormRow(subject = it) }
+    }
+
+    suspend fun loadTemplates(childId: Long, forClassName: String) {
+        if (childId == 0L || forClassName.isBlank()) return
+        val subjectTemplate = viewModel.getTemplate(childId, forClassName, "SUBJECT")
+        if (subjectTemplate.isNotEmpty()) rows = mergeWithTemplate(rows, subjectTemplate)
+        val coCurricularTemplate = viewModel.getTemplate(childId, forClassName, "COCURRICULAR")
+        if (coCurricularTemplate.isNotEmpty()) coCurricularRows = mergeWithTemplate(coCurricularRows, coCurricularTemplate)
+    }
+
+    // Auto-fill once, the first time both a child and class are known and
+    // nothing has been captured/typed yet — covers "open Scan Report and
+    // pick a child/class" without requiring a photo or a button tap.
+    LaunchedEffect(selectedChildId, className) {
+        val childId = selectedChildId
+        if (!templateAutoLoaded && childId != null && className.isNotBlank() &&
+            rawText.isEmpty() && rows.size == 1 && rows[0].subject.isBlank() && coCurricularRows.isEmpty()
+        ) {
+            templateAutoLoaded = true
+            loadTemplates(childId, className)
+        }
+    }
 
     fun doSave(force: Boolean) {
         viewModel.saveExam(
@@ -139,16 +175,36 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
                 }
             }
 
+            // Fill in any subject/activity the OCR pass missed from what was
+            // saved for this child+class before — the accuracy floor for a
+            // second-or-later scan of the same class is "we already know
+            // the full list," even if this particular photo read badly.
+            val effectiveClassName = parsed.className.ifBlank { className }
+            var addedFromTemplate = 0
+            if (matchedChild != null && effectiveClassName.isNotBlank()) {
+                val beforeSubjectCount = rows.count { it.subject.isNotBlank() }
+                val beforeCoCount = coCurricularRows.count { it.subject.isNotBlank() }
+                loadTemplates(matchedChild.id, effectiveClassName)
+                templateAutoLoaded = true
+                addedFromTemplate = (rows.count { it.subject.isNotBlank() } - beforeSubjectCount) +
+                    (coCurricularRows.count { it.subject.isNotBlank() } - beforeCoCount)
+            }
+
             val childNote = when {
                 createdNewChild -> "Added new child: ${matchedChild?.fullName}."
                 matchedChild != null -> "Matched child: ${matchedChild.fullName}."
                 parsed.studentName.isNotBlank() -> "Couldn't match \"${parsed.studentName}\" to an enrolled child — select manually."
                 else -> "Couldn't read a student name — select the child manually."
             }
-            status = if (parsed.subjectRows.isNotEmpty()) {
-                "$childNote Extracted ${parsed.subjectRows.size} subject row(s) — please verify before saving."
+            val templateNote = if (addedFromTemplate > 0) {
+                " Added $addedFromTemplate more from the saved template (OCR missed them) — fill in marks."
             } else {
-                "$childNote Couldn't automatically parse subject rows — please enter marks manually."
+                ""
+            }
+            status = if (parsed.subjectRows.isNotEmpty()) {
+                "$childNote Extracted ${parsed.subjectRows.size} subject row(s) — please verify before saving.$templateNote"
+            } else {
+                "$childNote Couldn't automatically parse subject rows — please enter marks manually.$templateNote"
             }
         } catch (e: Exception) {
             status = "OCR failed: ${e.message}"
@@ -250,8 +306,16 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
                 }
             }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Subjects & Marks (verify before saving)", style = MaterialTheme.typography.titleMedium)
+            Text("Subjects & Marks (verify before saving)", style = MaterialTheme.typography.titleMedium)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = {
+                    val childId = selectedChildId
+                    if (childId == null || className.isBlank()) {
+                        scope.launch { snackbarHostState.showSnackbar("Select a child and class first") }
+                    } else {
+                        scope.launch { loadTemplates(childId, className) }
+                    }
+                }) { Text("Use Template") }
                 TextButton(onClick = { rows = rows + MarkFormRow() }) { Text("+ Add Row") }
             }
             MarksTableEditor(
@@ -260,8 +324,8 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
                 onRemoveRow = { i -> rows = rows.toMutableList().also { it.removeAt(i) } },
             )
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Co-Curricular Activities & Character Traits", style = MaterialTheme.typography.titleMedium)
+            Text("Co-Curricular Activities & Character Traits", style = MaterialTheme.typography.titleMedium)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = { coCurricularRows = coCurricularRows + MarkFormRow() }) { Text("+ Add Row") }
             }
             MarksTableEditor(

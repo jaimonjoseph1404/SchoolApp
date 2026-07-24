@@ -194,6 +194,47 @@ class OcrServiceTest {
     }
 
     @Test
+    fun `keeps a subject row when the score and grade are absent (AB), instead of dropping it`() {
+        // Real-world regression: a Quarterly report had "AB" (Absent) in the
+        // Score, Avg and Grade columns for a missed exam. The old parser
+        // only popped numeric trailing tokens, so it silently dropped these
+        // subjects entirely instead of showing them with a blank score.
+        val row = "1 English - I Theory 100 40 AB AB AB"
+        val parsed = OcrService.parseReportText(row)
+        assertEquals(1, parsed.size)
+        assertEquals("English - I", parsed[0].subject)
+        assertEquals("AB", parsed[0].grade)
+        assertEquals(null, parsed[0].marksObtained)
+        assertEquals(100.0, parsed[0].maxMarks)
+    }
+
+    @Test
+    fun `does not lose the next co-curricular row when a grade cell is a blank dash`() {
+        // Real-world regression: "Value Education -" (ungraded) followed by
+        // "Cleanliness A" on the same visual row. Without recognizing "-" as
+        // a row terminator, the token walk merged both activities into one
+        // mislabeled row ("Value Education - Cleanliness") and lost the
+        // Value Education entry's own (blank) grade.
+        val text = """
+            Progress Report : UNIT TEST II - 2025-2026
+            Student Name ARDON JAIMON Class III - C
+            Register No 366/2023-24
+            S.No Part-I Max Min Score Avg Grade
+            1 English 100 40 48 48 D
+            PART - II Co - Curricular Activities and Character Traits
+            Value Education - Cleanliness A
+            Attendance 97/104
+        """.trimIndent()
+        val parsed = OcrService.parseProgressReport(text)
+        val valueEd = parsed.coCurricularRows.firstOrNull { it.subject == "Value Education" }
+        val cleanliness = parsed.coCurricularRows.firstOrNull { it.subject == "Cleanliness" }
+        assertTrue("Value Education row missing entirely: ${parsed.coCurricularRows}", valueEd != null)
+        assertEquals("", valueEd?.grade)
+        assertTrue("Cleanliness row missing entirely: ${parsed.coCurricularRows}", cleanliness != null)
+        assertEquals("A", cleanliness?.grade)
+    }
+
+    @Test
     fun `parseReceiptText extracts amount, date and suggests a category`() {
         val text = """
             Auxilium School Fee Receipt

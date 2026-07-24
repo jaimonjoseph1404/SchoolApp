@@ -135,7 +135,12 @@ object OcrService {
 
     // CBSE-style grades (A1, B2, ...) as well as plain letter grades (A, C+, F, ...).
     private val gradeToken = Regex("^[A-Fa-f][12+-]?$")
+    // "AB" (Absent) appears in place of the grade, and often in place of the
+    // score/average too, on real report cards for a missed exam — a student
+    // being absent for one subject shouldn't drop that subject's whole row.
+    private val absentToken = Regex("^AB$", RegexOption.IGNORE_CASE)
     private val numberToken = Regex("^\\d{1,3}(?:\\.\\d+)?$")
+    private val cellToken = Regex("^(?:\\d{1,3}(?:\\.\\d+)?|AB)$", RegexOption.IGNORE_CASE)
     private val skipTrailingWords = setOf("THEORY", "PRACTICAL", "TH", "PR", "PRAC")
     private val nonSubjectLineStarts = setOf("TOTAL", "S.NO", "SNO", "PART-I", "PART-II", "PART")
 
@@ -157,13 +162,19 @@ object OcrService {
         var grade = ""
         if (gradeToken.matches(tokens.last())) {
             grade = tokens.removeAt(tokens.size - 1).uppercase()
+        } else if (absentToken.matches(tokens.last())) {
+            grade = tokens.removeAt(tokens.size - 1).uppercase()
         }
 
+        // Score/Avg cells can also read "AB" (absent) instead of a number —
+        // kept in the walk (as null once converted below) so the row isn't
+        // dropped just because one term's exam was missed.
         val numbers = mutableListOf<String>()
-        while (tokens.isNotEmpty() && numberToken.matches(tokens.last()) && numbers.size < 4) {
+        while (tokens.isNotEmpty() && cellToken.matches(tokens.last()) && numbers.size < 4) {
             numbers.add(0, tokens.removeAt(tokens.size - 1))
         }
         if (numbers.isEmpty()) return null
+        if (grade.isEmpty() && numbers.all { absentToken.matches(it) }) grade = "AB"
 
         if (tokens.isNotEmpty() && tokens.first().matches(Regex("^\\d{1,2}[.)]?$"))) {
             tokens.removeAt(0)
@@ -176,25 +187,29 @@ object OcrService {
         // inside an otherwise valid subject name shouldn't drop the whole row.
         if (subject.length < 2 || subject.none { it.isLetter() }) return null
 
+        // "AB" cells become null here rather than crashing toDouble() — an
+        // absent student still has a Max/Min column (or none, if the whole
+        // row is "AB"), never a numeric score.
+        val values = numbers.map { it.toDoubleOrNull() }
         val max: Double?
         val min: Double?
         val score: Double?
         val avg: Double?
-        when (numbers.size) {
+        when (values.size) {
             4 -> {
-                max = numbers[0].toDouble(); min = numbers[1].toDouble()
-                score = numbers[2].toDouble(); avg = numbers[3].toDouble()
+                max = values[0]; min = values[1]
+                score = values[2]; avg = values[3]
             }
             3 -> {
-                max = numbers[0].toDouble(); min = numbers[1].toDouble()
-                score = numbers[2].toDouble(); avg = score
+                max = values[0]; min = values[1]
+                score = values[2]; avg = score
             }
             2 -> {
-                score = numbers[0].toDouble(); max = numbers[1].toDouble()
+                score = values[0]; max = values[1]
                 min = null; avg = null
             }
             else -> {
-                score = numbers[0].toDouble(); max = null; min = null; avg = null
+                score = values[0]; max = null; min = null; avg = null
             }
         }
         val percentage = avg ?: if (max != null && max != 0.0 && score != null) (score / max) * 100.0 else null
@@ -206,7 +221,10 @@ object OcrService {
             grade = grade,
             percentage = percentage,
             rank = null,
-            remarks = if (min != null) "Min $min" else "",
+            remarks = listOfNotNull(
+                if (min != null) "Min $min" else null,
+                if (grade == "AB") "Absent" else null,
+            ).joinToString("; "),
         )
     }
 
@@ -317,6 +335,12 @@ object OcrService {
     // entry rather than an actual activity/trait rating and must be skipped.
     private val legendToken = Regex("^[A-Fa-f]:$")
     private val bareGradeToken = Regex("^[A-Fa-f]$")
+    // A blank/ungraded cell prints as a lone dash (e.g. "Value Education -")
+    // on real report cards. Without recognizing it as a row terminator (like
+    // a real grade letter), the walk keeps absorbing tokens into the label —
+    // e.g. "Value Education - Cleanliness" swallowing the *next* activity's
+    // name and losing its own row entirely.
+    private val ungradedToken = Regex("^-$")
 
     private val partTwoEndMarker = Regex("Attendance\\b|Teacher'?s?\\s*Remarks?|Signature", RegexOption.IGNORE_CASE)
 
@@ -353,13 +377,14 @@ object OcrService {
                     labelTokens = mutableListOf()
                     continue
                 }
-                if (bareGradeToken.matches(tok) && labelTokens.isNotEmpty()) {
+                if ((bareGradeToken.matches(tok) || ungradedToken.matches(tok)) && labelTokens.isNotEmpty()) {
                     val label = labelTokens.joinToString(" ").trim(',', '-', ':')
                     if (label.length >= 2 && label.any { it.isLetter() } && label.uppercase() !in nonSubjectLineStarts) {
                         results.add(
                             ExtractedMarkRow(
                                 subject = label, marksObtained = null, maxMarks = null,
-                                grade = tok.uppercase(), percentage = null, rank = null, remarks = "",
+                                grade = if (ungradedToken.matches(tok)) "" else tok.uppercase(),
+                                percentage = null, rank = null, remarks = "",
                             ),
                         )
                     }

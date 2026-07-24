@@ -54,6 +54,12 @@ class AcademicRecordsViewModel(
         return childDao.getById(id) ?: error("Failed to create child")
     }
 
+    /** Subjects (or co-curricular activities, per [kind]) previously saved
+     * for this child+class, so a new exam entry can be pre-filled with just
+     * the names and left for the user to type in marks only. */
+    suspend fun getTemplate(childId: Long, className: String, kind: String): List<String> =
+        if (childId == 0L || className.isBlank()) emptyList() else academicDao.getTemplateItems(childId, className.trim(), kind)
+
     fun saveExam(
         yearLabel: String, className: String, section: String, termName: String,
         examType: String, examDate: String, rows: List<MarkFormRow>,
@@ -100,6 +106,11 @@ class AcademicRecordsViewModel(
                     row.grade, row.rank.toIntOrNull(), row.remarks,
                 )
             }
+            // Learn/refresh the subject and co-curricular templates for this
+            // child+class from whatever was actually saved, so the next scan
+            // or manual entry for the same class can be pre-filled.
+            academicDao.saveTemplate(childId, className, "SUBJECT", validRows.map { it.subject })
+            academicDao.saveTemplate(childId, className, "COCURRICULAR", validCoCurricular.map { it.subject })
             onDone()
         }
     }

@@ -117,6 +117,35 @@ interface AcademicDao {
     @Query("SELECT COUNT(*) FROM marks WHERE examId = :examId")
     suspend fun markCountForExam(examId: Long): Int
 
+    // --- Subject / co-curricular templates ---
+    @Query(
+        "SELECT itemName FROM subject_templates WHERE childId = :childId AND className = :className " +
+            "AND kind = :kind ORDER BY orderIndex",
+    )
+    suspend fun getTemplateItems(childId: Long, className: String, kind: String): List<String>
+
+    @Query("DELETE FROM subject_templates WHERE childId = :childId AND className = :className AND kind = :kind")
+    suspend fun clearTemplate(childId: Long, className: String, kind: String)
+
+    @Insert
+    suspend fun insertTemplateItems(items: List<SubjectTemplateItem>)
+
+    /** Replaces the remembered subject/activity list for this child+class
+     * with [items] — called after every save so the template stays in sync
+     * with whatever was actually entered (scan or manual), no separate
+     * "manage template" step required. No-ops on an empty list so a save
+     * with nothing entered can't wipe out a previously learned template. */
+    suspend fun saveTemplate(childId: Long, className: String, kind: String, items: List<String>) {
+        val cleaned = items.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        if (cleaned.isEmpty()) return
+        clearTemplate(childId, className.trim(), kind)
+        insertTemplateItems(
+            cleaned.mapIndexed { index, name ->
+                SubjectTemplateItem(childId = childId, className = className.trim(), kind = kind, itemName = name, orderIndex = index)
+            },
+        )
+    }
+
     // --- Marks ---
     @Query("SELECT id FROM marks WHERE examId = :examId AND subjectId = :subjectId LIMIT 1")
     suspend fun findMark(examId: Long, subjectId: Long): Long?

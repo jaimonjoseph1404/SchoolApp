@@ -55,6 +55,20 @@ data class Mark(
     val remarks: String = "",
 )
 
+/** One remembered subject or co-curricular activity name for a given child
+ * + class, so a new exam entry (scan or manual) can be pre-populated with
+ * the full list and only need marks typed in — instead of retyping every
+ * subject name each term. [kind] is "SUBJECT" or "COCURRICULAR". */
+@Entity(tableName = "subject_templates")
+data class SubjectTemplateItem(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val childId: Long,
+    val className: String,
+    val kind: String,
+    val itemName: String,
+    val orderIndex: Int,
+)
+
 /** Flat, joined view of a child's full marks history — mirrors the Python
  * AcademicRepository.get_marks_history query. */
 data class MarkHistoryRow(
