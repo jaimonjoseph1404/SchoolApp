@@ -70,19 +70,25 @@ interface AcademicDao {
 
     @Query(
         "UPDATE exams SET examDate = :examDate, attendanceDaysPresent = :attendanceDaysPresent, " +
-            "attendanceWorkingDays = :attendanceWorkingDays, teacherRemarks = :teacherRemarks WHERE id = :id",
+            "attendanceWorkingDays = :attendanceWorkingDays, teacherRemarks = :teacherRemarks, " +
+            "totalMarksObtained = :totalMarksObtained, totalMaxMarks = :totalMaxMarks WHERE id = :id",
     )
     suspend fun updateExamDetails(
         id: Long, examDate: String, attendanceDaysPresent: Int?, attendanceWorkingDays: Int?, teacherRemarks: String,
+        totalMarksObtained: Double?, totalMaxMarks: Double?,
     )
 
     suspend fun getOrCreateExam(
         termId: Long, examType: String, examDate: String = "",
         attendanceDaysPresent: Int? = null, attendanceWorkingDays: Int? = null, teacherRemarks: String = "",
+        totalMarksObtained: Double? = null, totalMaxMarks: Double? = null,
     ): Long {
         val existing = findExam(termId, examType.trim())
         return if (existing != null) {
-            updateExamDetails(existing, examDate.trim(), attendanceDaysPresent, attendanceWorkingDays, teacherRemarks.trim())
+            updateExamDetails(
+                existing, examDate.trim(), attendanceDaysPresent, attendanceWorkingDays, teacherRemarks.trim(),
+                totalMarksObtained, totalMaxMarks,
+            )
             existing
         } else {
             insertExam(
@@ -90,6 +96,7 @@ interface AcademicDao {
                     termId = termId, examType = examType.trim(), examDate = examDate.trim(),
                     attendanceDaysPresent = attendanceDaysPresent, attendanceWorkingDays = attendanceWorkingDays,
                     teacherRemarks = teacherRemarks.trim(),
+                    totalMarksObtained = totalMarksObtained, totalMaxMarks = totalMaxMarks,
                 ),
             )
         }
@@ -191,7 +198,8 @@ interface AcademicDao {
                m.marksObtained as marksObtained, m.maxMarks as maxMarks, m.grade as grade,
                m.percentage as percentage, m.rank as `rank`, m.remarks as remarks,
                e.attendanceDaysPresent as attendanceDaysPresent, e.attendanceWorkingDays as attendanceWorkingDays,
-               e.teacherRemarks as teacherRemarks
+               e.teacherRemarks as teacherRemarks, e.totalMarksObtained as totalMarksObtained,
+               e.totalMaxMarks as totalMaxMarks
         FROM marks m
         JOIN exams e ON e.id = m.examId
         JOIN terms t ON t.id = e.termId

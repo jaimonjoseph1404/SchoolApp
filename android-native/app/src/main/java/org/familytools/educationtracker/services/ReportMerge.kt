@@ -22,6 +22,7 @@ fun mergeReportCards(
 
     fun pickString(vararg values: String): String = values.firstOrNull { it.isNotBlank() } ?: ""
     fun pickInt(vararg values: Int?): Int? = values.firstOrNull { it != null }
+    fun pickDouble(vararg values: Double?): Double? = values.firstOrNull { it != null }
     // A name must actually look like a name — a register number ("366/2023-24")
     // or other mostly-numeric text is never a valid pick here, from any source.
     fun pickName(vararg values: String): String = values.firstOrNull { it.isNotBlank() && looksLikeName(it) } ?: ""
@@ -39,6 +40,8 @@ fun mergeReportCards(
         attendanceDaysPresent = pickInt(regex.attendanceDaysPresent, image.attendanceDaysPresent, text.attendanceDaysPresent),
         attendanceWorkingDays = pickInt(regex.attendanceWorkingDays, image.attendanceWorkingDays, text.attendanceWorkingDays),
         teacherRemarks = pickString(regex.teacherRemarks, image.teacherRemarks, text.teacherRemarks),
+        totalMarksObtained = pickDouble(regex.totalMarksObtained, image.totalMarksObtained, text.totalMarksObtained),
+        totalMaxMarks = pickDouble(regex.totalMaxMarks, image.totalMaxMarks, text.totalMaxMarks),
         subjectRows = mergeRowsByName(image.subjectRows, text.subjectRows, regex.subjectRows),
         coCurricularRows = mergeRowsByName(image.coCurricularRows, text.coCurricularRows, regex.coCurricularRows),
     )
@@ -58,6 +61,7 @@ fun combineScannedPages(pages: List<ParsedReportCard>): ParsedReportCard {
 
     fun pickString(selector: (ParsedReportCard) -> String) = pages.map(selector).firstOrNull { it.isNotBlank() } ?: ""
     fun pickInt(selector: (ParsedReportCard) -> Int?) = pages.map(selector).firstOrNull { it != null }
+    fun pickDouble(selector: (ParsedReportCard) -> Double?) = pages.map(selector).firstOrNull { it != null }
     fun pickName(selector: (ParsedReportCard) -> String) =
         pages.map(selector).firstOrNull { it.isNotBlank() && looksLikeName(it) } ?: ""
 
@@ -78,6 +82,8 @@ fun combineScannedPages(pages: List<ParsedReportCard>): ParsedReportCard {
         attendanceDaysPresent = pickInt { it.attendanceDaysPresent },
         attendanceWorkingDays = pickInt { it.attendanceWorkingDays },
         teacherRemarks = pickString { it.teacherRemarks },
+        totalMarksObtained = pickDouble { it.totalMarksObtained },
+        totalMaxMarks = pickDouble { it.totalMaxMarks },
         subjectRows = mergeRowsByName(*reversedRowSources.map { it.subjectRows }.toTypedArray()),
         coCurricularRows = mergeRowsByName(*reversedRowSources.map { it.coCurricularRows }.toTypedArray()),
     )

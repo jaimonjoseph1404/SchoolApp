@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShowChart
@@ -47,6 +48,7 @@ private val MODULES = listOf(
     ModuleCard(Icons.Filled.CameraAlt, "Scan Report", "OCR report capture", "scan_report"),
     ModuleCard(Icons.Filled.Payments, "Expenses", "Track educational costs", "expenses"),
     ModuleCard(Icons.Filled.SupervisorAccount, "Teachers", "Teacher effectiveness", "teachers"),
+    ModuleCard(Icons.Filled.PhotoLibrary, "Certificates & Photos", "Certificates & class photos, year-wise", "documents"),
     ModuleCard(Icons.Filled.ShowChart, "Analytics", "Trends & AI insights", "analytics"),
     ModuleCard(Icons.Filled.Assessment, "Reports", "PDF & CSV exports", "reports"),
     ModuleCard(Icons.Filled.CloudUpload, "Backup", "Export & restore data", "backup"),

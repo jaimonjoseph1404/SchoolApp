@@ -32,6 +32,8 @@ data class ParsedReportCard(
     val attendanceDaysPresent: Int? = null,
     val attendanceWorkingDays: Int? = null,
     val teacherRemarks: String = "",
+    val totalMarksObtained: Double? = null,
+    val totalMaxMarks: Double? = null,
     val subjectRows: List<ExtractedMarkRow> = emptyList(),
     val coCurricularRows: List<ExtractedMarkRow> = emptyList(),
 )
@@ -243,6 +245,44 @@ object OcrService {
     fun parseReportText(text: String): List<ExtractedMarkRow> =
         text.lines().mapNotNull { parseSubjectRow(it) }
 
+    private val totalLineStart = Regex("^(?:GRAND\\s+)?TOTAL\\b", RegexOption.IGNORE_CASE)
+
+    /** The "Total" row (sum of all subjects' marks) is deliberately excluded
+     * from [ParsedReportCard.subjectRows] via [nonSubjectLineStarts] — mixing
+     * a summary row into per-subject data would skew subject averages
+     * elsewhere in the app — but the user still wants to see and save it, so
+     * it's captured separately here. The Total row is the tail end of the
+     * same table as the subject rows above it, so its number columns follow
+     * the exact same Max/Min/Score/Avg-or-Score/Max convention already
+     * decoded in [parseSubjectRow] (e.g. "Total 900 360 348 E" is
+     * Max=900 Min=360 Score=348, i.e. 348 obtained out of 900 — not the
+     * first two numbers read left to right). Returns (marksObtained, maxMarks). */
+    private fun parseTotalRow(layoutRows: List<String>, flatText: String): Pair<Double?, Double?> {
+        val candidates = (layoutRows + flatText.lines()).map { cleanRow(it).trim() }
+        for (line in candidates) {
+            if (!totalLineStart.containsMatchIn(line)) continue
+            val tokens = line.split(Regex("\\s+")).filter { it.isNotBlank() }.toMutableList()
+            while (tokens.isNotEmpty() && !cellToken.matches(tokens.first()) && !gradeToken.matches(tokens.first())) {
+                tokens.removeAt(0)
+            }
+            if (tokens.isNotEmpty() && (gradeToken.matches(tokens.last()) || absentToken.matches(tokens.last()))) {
+                tokens.removeAt(tokens.size - 1)
+            }
+            val numbers = mutableListOf<String>()
+            while (tokens.isNotEmpty() && cellToken.matches(tokens.last()) && numbers.size < 4) {
+                numbers.add(0, tokens.removeAt(tokens.size - 1))
+            }
+            val values = numbers.mapNotNull { it.toDoubleOrNull() }
+            if (values.isEmpty()) continue
+            return when (values.size) {
+                4, 3 -> values[2] to values[0] // Max Min Score [Avg] -> (Score, Max)
+                2 -> values[0] to values[1] // Score Max -> (Score, Max)
+                else -> values[0] to null
+            }
+        }
+        return null to null
+    }
+
     // Roman numerals I-XII, longest-first so alternation can't match a
     // prefix (e.g. "I" inside "III") before trying the full token.
     private const val ROMAN_CLASS = "VIII|VII|XII|III|XI|IV|IX|VI|II|X|V|I"
@@ -363,6 +403,7 @@ object OcrService {
         val subjectRows = if (fromLayout.size >= fromFlatText.size) fromLayout else fromFlatText
 
         val coCurricularRows = parseCoCurricularSection(text, layoutRows)
+        val (totalMarksObtained, totalMaxMarks) = parseTotalRow(layoutRows, text)
 
         return ParsedReportCard(
             studentName = studentName,
@@ -376,6 +417,8 @@ object OcrService {
             attendanceDaysPresent = attendanceDaysPresent,
             attendanceWorkingDays = attendanceWorkingDays,
             teacherRemarks = teacherRemarks,
+            totalMarksObtained = totalMarksObtained,
+            totalMaxMarks = totalMaxMarks,
             subjectRows = subjectRows,
             coCurricularRows = coCurricularRows,
         )

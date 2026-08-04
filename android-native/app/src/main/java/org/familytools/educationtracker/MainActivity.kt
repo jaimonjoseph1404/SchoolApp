@@ -50,6 +50,9 @@ class MainActivity : FragmentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels {
         SettingsViewModel.factory(settingsRepository)
     }
+    private val documentsViewModel: org.familytools.educationtracker.ui.DocumentsViewModel by viewModels {
+        org.familytools.educationtracker.ui.DocumentsViewModel.factory(db.miscDao(), db.childDao())
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +71,7 @@ class MainActivity : FragmentActivity() {
                         analytics = analyticsViewModel,
                         reports = reportsViewModel,
                         settings = settingsViewModel,
+                        documents = documentsViewModel,
                     ),
                     startLocked = startLocked,
                 )

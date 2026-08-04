@@ -65,6 +65,7 @@ class AcademicRecordsViewModel(
         examType: String, examDate: String, rows: List<MarkFormRow>,
         coCurricularRows: List<MarkFormRow> = emptyList(),
         attendanceDaysPresent: Int? = null, attendanceWorkingDays: Int? = null, teacherRemarks: String = "",
+        totalMarksObtained: Double? = null, totalMaxMarks: Double? = null,
         force: Boolean = false,
         onDone: () -> Unit, onError: (String) -> Unit, onDuplicate: () -> Unit = {},
     ) {
@@ -98,6 +99,7 @@ class AcademicRecordsViewModel(
             val termId = academicDao.getOrCreateTerm(classId, termName)
             val examId = academicDao.getOrCreateExam(
                 termId, examType, examDate, attendanceDaysPresent, attendanceWorkingDays, teacherRemarks,
+                totalMarksObtained, totalMaxMarks,
             )
             for (row in validRows + validCoCurricular) {
                 academicDao.addOrUpdateMark(

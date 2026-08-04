@@ -40,6 +40,8 @@ data class Exam(
     val attendanceDaysPresent: Int? = null,
     val attendanceWorkingDays: Int? = null,
     val teacherRemarks: String = "",
+    val totalMarksObtained: Double? = null,
+    val totalMaxMarks: Double? = null,
 )
 
 @Entity(tableName = "marks")
@@ -87,4 +89,6 @@ data class MarkHistoryRow(
     val attendanceDaysPresent: Int? = null,
     val attendanceWorkingDays: Int? = null,
     val teacherRemarks: String = "",
+    val totalMarksObtained: Double? = null,
+    val totalMaxMarks: Double? = null,
 )

@@ -241,6 +241,27 @@ class OcrServiceTest {
     }
 
     @Test
+    fun `extracts the Total row's obtained and max marks, not just the first two numbers`() {
+        // "Total 900 360 348 E" follows the same Max Min Score [Avg] Grade
+        // column order as the subject rows above it (900=Max, 360=Min,
+        // 348=Score) — the actual total obtained is 348/900, not 900/360.
+        val parsed = OcrService.parseProgressReport(sampleReportText)
+        assertEquals(348.0, parsed.totalMarksObtained)
+        assertEquals(900.0, parsed.totalMaxMarks)
+    }
+
+    @Test
+    fun `extracts a simple two-column Total row as Score Max`() {
+        val row = "Total 425 500"
+        val (obtained, max) = OcrService.let {
+            val parsed = it.parseProgressReport("S.No Part-I Max Min Score Avg Grade\n$row")
+            parsed.totalMarksObtained to parsed.totalMaxMarks
+        }
+        assertEquals(425.0, obtained)
+        assertEquals(500.0, max)
+    }
+
+    @Test
     fun `strips table-border pipe characters before parsing a subject row`() {
         val row = "| 1 | English - I | Theory | 100 | 40 | 55 | 55 | C |"
         val parsed = OcrService.parseReportText(row)

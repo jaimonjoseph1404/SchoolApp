@@ -20,3 +20,19 @@ data class BackupRecord(
     val backupType: String,
     val createdAt: Long = System.currentTimeMillis(),
 )
+
+/** A certificate or class photo attached to a child, segregated by academic
+ * year. [category] is "CERTIFICATE" or "CLASS_PHOTO"; [imagePath] is an
+ * absolute path into this app's own external-files storage (the source
+ * camera/gallery image is copied there so it survives even if the original
+ * is deleted from the device gallery). */
+@Entity(tableName = "child_documents")
+data class ChildDocument(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val childId: Long,
+    val academicYear: String,
+    val category: String,
+    val title: String = "",
+    val imagePath: String,
+    val createdAt: Long = System.currentTimeMillis(),
+)

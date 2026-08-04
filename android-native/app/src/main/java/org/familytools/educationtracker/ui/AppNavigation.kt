@@ -19,6 +19,7 @@ class AppViewModels(
     val analytics: AnalyticsViewModel,
     val reports: ReportsViewModel,
     val settings: SettingsViewModel,
+    val documents: DocumentsViewModel,
 )
 
 @Composable
@@ -109,6 +110,9 @@ fun AppNavigation(viewModels: AppViewModels, startLocked: Boolean) {
         }
         composable("settings") {
             SettingsScreen(viewModels.settings, onBack = { navController.popBackStack() })
+        }
+        composable("documents") {
+            DocumentsScreen(viewModels.documents, onBack = { navController.popBackStack() })
         }
         composable("search") {
             SearchScreen(

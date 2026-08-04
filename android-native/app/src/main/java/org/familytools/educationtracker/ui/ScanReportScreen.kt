@@ -73,6 +73,8 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
     var daysPresent by remember { mutableStateOf("") }
     var workingDays by remember { mutableStateOf("") }
     var teacherRemarksText by remember { mutableStateOf("") }
+    var totalMarksObtained by remember { mutableStateOf("") }
+    var totalMaxMarks by remember { mutableStateOf("") }
     var rows by remember { mutableStateOf(listOf(MarkFormRow())) }
     var coCurricularRows by remember { mutableStateOf(listOf<MarkFormRow>()) }
     var status by remember { mutableStateOf("") }
@@ -145,6 +147,8 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
                 attendanceDaysPresent = daysPresent.toIntOrNull(),
                 attendanceWorkingDays = workingDays.toIntOrNull(),
                 teacherRemarks = teacherRemarksText,
+                totalMarksObtained = totalMarksObtained.toDoubleOrNull(),
+                totalMaxMarks = totalMaxMarks.toDoubleOrNull(),
                 force = force,
                 onDone = {
                     rows = listOf(MarkFormRow())
@@ -227,6 +231,8 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
             if (parsed.attendanceDaysPresent != null) daysPresent = parsed.attendanceDaysPresent.toString()
             if (parsed.attendanceWorkingDays != null) workingDays = parsed.attendanceWorkingDays.toString()
             if (parsed.teacherRemarks.isNotBlank()) teacherRemarksText = parsed.teacherRemarks
+            if (parsed.totalMarksObtained != null) totalMarksObtained = parsed.totalMarksObtained.toString()
+            if (parsed.totalMaxMarks != null) totalMaxMarks = parsed.totalMaxMarks.toString()
 
             if (parsed.subjectRows.isNotEmpty()) {
                 rows = parsed.subjectRows.map {
@@ -361,6 +367,16 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
                 teacherRemarksText, { teacherRemarksText = it },
                 label = { Text("Teacher's Remarks") }, modifier = Modifier.fillMaxWidth(),
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    totalMarksObtained, { totalMarksObtained = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("Total Marks Obtained") }, modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    totalMaxMarks, { totalMaxMarks = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("Total Max Marks") }, modifier = Modifier.weight(1f),
+                )
+            }
 
             Text("Capture Report", style = MaterialTheme.typography.titleMedium)
             Text(

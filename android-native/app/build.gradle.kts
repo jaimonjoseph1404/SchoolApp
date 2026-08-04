@@ -18,8 +18,8 @@ android {
         // Bump the 3rd (patch) digit of versionName, and versionCode by 1,
         // on every build handed off for install — not on every incidental
         // Gradle invocation during dev/test.
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
     }
 
     buildTypes {

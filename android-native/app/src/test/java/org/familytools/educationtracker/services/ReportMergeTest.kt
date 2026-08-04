@@ -153,6 +153,15 @@ class ReportMergeTest {
     }
 
     @Test
+    fun `totalMarksObtained and totalMaxMarks follow the same regex-first fallback rule as attendance`() {
+        val regex = ParsedReportCard(totalMarksObtained = 348.0, totalMaxMarks = 900.0)
+        val image = ParsedReportCard(totalMarksObtained = 999.0, totalMaxMarks = 999.0)
+        val merged = mergeReportCards(regex, aiText = null, aiImage = image)
+        assertEquals(348.0, merged.totalMarksObtained)
+        assertEquals(900.0, merged.totalMaxMarks)
+    }
+
+    @Test
     fun `pickInt returns null rather than 0 when nothing has a value`() {
         val merged = mergeReportCards(ParsedReportCard(), null, null)
         assertNull(merged.attendanceDaysPresent)
