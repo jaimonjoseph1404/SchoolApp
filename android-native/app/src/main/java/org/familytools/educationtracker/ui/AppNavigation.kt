@@ -64,7 +64,7 @@ fun AppNavigation(viewModels: AppViewModels, startLocked: Boolean) {
             AcademicRecordsScreen(viewModels.academic, onBack = { navController.popBackStack() })
         }
         composable("scan_report") {
-            ScanReportScreen(viewModels.academic, onBack = { navController.popBackStack() })
+            ScanReportScreen(viewModels.academic, viewModels.settings, onBack = { navController.popBackStack() })
         }
         composable("teachers") {
             TeachersScreen(

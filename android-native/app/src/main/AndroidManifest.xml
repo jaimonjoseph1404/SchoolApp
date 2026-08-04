@@ -2,12 +2,19 @@
 
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Downloading AI models (LiteRT-LM) for AI-assisted report scanning. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.EducationTracker">
+
+        <!-- Optional GPU delegate libs for LiteRT-LM — app still works on CPU
+             backend without these being present on the device. -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
 
         <activity
             android:name=".MainActivity"

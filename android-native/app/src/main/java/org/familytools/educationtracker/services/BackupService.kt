@@ -102,7 +102,7 @@ object BackupService {
     private fun recordBackup(context: Context, path: String, type: String) {
         db(context).execSQL(
             "INSERT INTO backups (filePath, backupType, createdAt) VALUES (?, ?, ?)",
-            arrayOf(path, type, System.currentTimeMillis()),
+            arrayOf<Any>(path, type, System.currentTimeMillis()),
         )
     }
 

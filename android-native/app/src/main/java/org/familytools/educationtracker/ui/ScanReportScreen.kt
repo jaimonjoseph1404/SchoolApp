@@ -39,15 +39,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import org.familytools.educationtracker.services.AiModel
+import org.familytools.educationtracker.services.AiModelManager
+import org.familytools.educationtracker.services.AiReportParser
 import org.familytools.educationtracker.services.NameMatcher
 import org.familytools.educationtracker.services.OcrService
+import org.familytools.educationtracker.services.mergeReportCards
 import java.io.File
 
 @Composable
-fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
+fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: SettingsViewModel, onBack: () -> Unit) {
     val children by viewModel.children.collectAsState()
     val selectedChildId by viewModel.selectedChildId.collectAsState()
+    val aiScanningEnabled by settingsViewModel.isAiScanningEnabled.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -129,7 +136,29 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
         try {
             val ocr = OcrService.recognize(context, uri)
             rawText = ocr.fullText
-            val parsed = OcrService.parseProgressReport(ocr.fullText, ocr.rows)
+            var parsed = OcrService.parseProgressReport(ocr.fullText, ocr.rows)
+
+            // AI-assisted structuring is additive: it only replaces `parsed`
+            // if at least one pass actually produced a result, so a model
+            // that isn't downloaded, times out, or fails to parse never
+            // regresses below what the regex parser alone already found.
+            var aiUsed = false
+            if (aiScanningEnabled) {
+                val textReady = AiModelManager.isReady(context, AiModel.TEXT)
+                val visionReady = AiModelManager.isReady(context, AiModel.VISION)
+                if (textReady || visionReady) {
+                    status = "Reading with AI..."
+                    val (aiText, aiImage) = coroutineScope {
+                        val textDeferred = if (textReady) async { AiReportParser.structureFromText(context, ocr.fullText) } else null
+                        val imageDeferred = if (visionReady) async { AiReportParser.structureFromImage(context, uri) } else null
+                        textDeferred?.await() to imageDeferred?.await()
+                    }
+                    if (aiText != null || aiImage != null) {
+                        parsed = mergeReportCards(parsed, aiText, aiImage)
+                        aiUsed = true
+                    }
+                }
+            }
 
             var matchedChild = NameMatcher.findBestMatch(children, parsed.studentName)
             var createdNewChild = false
@@ -201,8 +230,9 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Unit) {
             } else {
                 ""
             }
+            val aiNote = if (aiUsed) " (AI-assisted)" else ""
             status = if (parsed.subjectRows.isNotEmpty()) {
-                "$childNote Extracted ${parsed.subjectRows.size} subject row(s) — please verify before saving.$templateNote"
+                "$childNote Extracted ${parsed.subjectRows.size} subject row(s)$aiNote — please verify before saving.$templateNote"
             } else {
                 "$childNote Couldn't automatically parse subject rows — please enter marks manually.$templateNote"
             }

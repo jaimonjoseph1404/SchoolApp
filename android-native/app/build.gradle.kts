@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -28,12 +30,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
@@ -52,7 +56,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
 
-    val roomVersion = "2.6.1"
+    val roomVersion = "2.7.2"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
@@ -70,6 +74,11 @@ dependencies {
 
     // Camera capture (system camera app via intent) + gallery/file picking
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+
+    // On-device AI (LiteRT-LM) — structures OCR'd/photographed report cards
+    // into JSON via a local LLM, as a smarter layer on top of (not a
+    // replacement for) the regex parser in OcrService.
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.15.0")
 
     testImplementation("junit:junit:4.13.2")
 }

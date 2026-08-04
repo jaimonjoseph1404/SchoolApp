@@ -189,7 +189,7 @@ interface AcademicDao {
         SELECT ay.yearLabel as yearLabel, c.className as className, t.termName as termName,
                e.examType as examType, e.examDate as examDate, s.name as subjectName,
                m.marksObtained as marksObtained, m.maxMarks as maxMarks, m.grade as grade,
-               m.percentage as percentage, m.rank as rank, m.remarks as remarks,
+               m.percentage as percentage, m.rank as `rank`, m.remarks as remarks,
                e.attendanceDaysPresent as attendanceDaysPresent, e.attendanceWorkingDays as attendanceWorkingDays,
                e.teacherRemarks as teacherRemarks
         FROM marks m

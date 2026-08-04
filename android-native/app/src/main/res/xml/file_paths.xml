@@ -2,4 +2,5 @@
     <cache-path name="captures" path="captures/" />
     <external-files-path name="reports" path="reports/" />
     <external-files-path name="backups" path="backups/" />
+    <external-files-path name="models" path="models/" />
 </paths>

@@ -21,14 +21,20 @@ class SettingsRepository(private val context: Context) {
         val PIN_SALT = stringPreferencesKey("pin_salt")
         val PIN_HASH = stringPreferencesKey("pin_hash")
         val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
+        val AI_SCANNING_ENABLED = booleanPreferencesKey("ai_scanning_enabled")
     }
 
     val isDarkTheme: Flow<Boolean> = context.dataStore.data.map { it[Keys.THEME_DARK] ?: false }
     val isPinLockEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.PIN_ENABLED] ?: false }
     val isBiometricEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.BIOMETRIC_ENABLED] ?: false }
+    val isAiScanningEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.AI_SCANNING_ENABLED] ?: false }
 
     suspend fun setDarkTheme(enabled: Boolean) {
         context.dataStore.edit { it[Keys.THEME_DARK] = enabled }
+    }
+
+    suspend fun setAiScanningEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AI_SCANNING_ENABLED] = enabled }
     }
 
     suspend fun setBiometricEnabled(enabled: Boolean) {

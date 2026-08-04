@@ -17,9 +17,15 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val isBiometricEnabled: StateFlow<Boolean> = repository.isBiometricEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isAiScanningEnabled: StateFlow<Boolean> = repository.isAiScanningEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     fun setDarkTheme(enabled: Boolean) {
         viewModelScope.launch { repository.setDarkTheme(enabled) }
+    }
+
+    fun setAiScanningEnabled(enabled: Boolean) {
+        viewModelScope.launch { repository.setAiScanningEnabled(enabled) }
     }
 
     fun setPin(pin: String, onDone: () -> Unit) {
