@@ -10,6 +10,42 @@ class ReportMergeTest {
         ExtractedMarkRow(subject, marksObtained = null, maxMarks = null, grade = grade, percentage = null, rank = null, remarks = "")
 
     @Test
+    fun `combineScannedPages returns the single page unchanged`() {
+        val page = ParsedReportCard(studentName = "ARDON JAIMON")
+        assertEquals(page, combineScannedPages(listOf(page)))
+    }
+
+    @Test
+    fun `combineScannedPages keeps the first page's field, not a later page's`() {
+        // A closer second shot of Part-II shouldn't be able to clobber a
+        // good first-page reading of the student name/class.
+        val first = ParsedReportCard(studentName = "ARDON JAIMON", className = "III")
+        val second = ParsedReportCard(studentName = "SOMEONE ELSE", className = "V")
+        val combined = combineScannedPages(listOf(first, second))
+        assertEquals("ARDON JAIMON", combined.studentName)
+        assertEquals("III", combined.className)
+    }
+
+    @Test
+    fun `combineScannedPages fills a field only the second page found`() {
+        val first = ParsedReportCard(attendanceDaysPresent = null)
+        val second = ParsedReportCard(attendanceDaysPresent = 26, attendanceWorkingDays = 26)
+        val combined = combineScannedPages(listOf(first, second))
+        assertEquals(26, combined.attendanceDaysPresent)
+        assertEquals(26, combined.attendanceWorkingDays)
+    }
+
+    @Test
+    fun `combineScannedPages unions subject rows across pages, first page wins on collision`() {
+        val first = ParsedReportCard(subjectRows = listOf(row("English", "B"), row("Kannada", "E")))
+        val second = ParsedReportCard(subjectRows = listOf(row("English", "C"), row("Hindi", "D")))
+        val combined = combineScannedPages(listOf(first, second))
+        val bySubject = combined.subjectRows.associateBy { it.subject }
+        assertEquals(setOf("English", "Kannada", "Hindi"), bySubject.keys)
+        assertEquals("B", bySubject.getValue("English").grade) // first page's row wins
+    }
+
+    @Test
     fun `falls back to regex result entirely when both AI passes fail`() {
         val regex = ParsedReportCard(studentName = "ARDON JAIMON", subjectRows = listOf(row("English", "B")))
         val merged = mergeReportCards(regex, aiText = null, aiImage = null)

@@ -2,9 +2,10 @@
 
 package org.familytools.educationtracker.ui
 
-import android.content.pm.PackageManager
+import android.app.Activity
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -38,7 +39,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -47,8 +50,9 @@ import org.familytools.educationtracker.services.AiModelManager
 import org.familytools.educationtracker.services.AiReportParser
 import org.familytools.educationtracker.services.NameMatcher
 import org.familytools.educationtracker.services.OcrService
+import org.familytools.educationtracker.services.ParsedReportCard
+import org.familytools.educationtracker.services.combineScannedPages
 import org.familytools.educationtracker.services.mergeReportCards
-import java.io.File
 
 @Composable
 fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: SettingsViewModel, onBack: () -> Unit) {
@@ -75,7 +79,6 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
     var rawText by remember { mutableStateOf("") }
     var showRawText by remember { mutableStateOf(false) }
     var showDuplicateDialog by remember { mutableStateOf(false) }
-    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var templateAutoLoaded by remember { mutableStateOf(false) }
     // A scanned name that didn't match an existing child is only *staged*
     // here — the Child row itself isn't created until Save is actually
@@ -156,34 +159,53 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
         }
     }
 
-    suspend fun runOcr(uri: Uri) {
-        status = "Processing image..."
-        try {
-            val ocr = OcrService.recognize(context, uri)
-            rawText = ocr.fullText
-            var parsed = OcrService.parseProgressReport(ocr.fullText, ocr.rows)
+    // Runs OCR (+ optional AI structuring) on a single captured page, without
+    // touching any screen state — kept pure so runOcr() can call it once per
+    // page and combine the results for a multi-page scan.
+    suspend fun scanOneImage(uri: Uri): Pair<ParsedReportCard, String> {
+        val ocr = OcrService.recognize(context, uri)
+        var parsed = OcrService.parseProgressReport(ocr.fullText, ocr.rows)
 
-            // AI-assisted structuring is additive: it only replaces `parsed`
-            // if at least one pass actually produced a result, so a model
-            // that isn't downloaded, times out, or fails to parse never
-            // regresses below what the regex parser alone already found.
-            var aiUsed = false
-            if (aiScanningEnabled) {
-                val textReady = AiModelManager.isReady(context, AiModel.TEXT)
-                val visionReady = AiModelManager.isReady(context, AiModel.VISION)
-                if (textReady || visionReady) {
-                    status = "Reading with AI..."
-                    val (aiText, aiImage) = coroutineScope {
-                        val textDeferred = if (textReady) async { AiReportParser.structureFromText(context, ocr.fullText) } else null
-                        val imageDeferred = if (visionReady) async { AiReportParser.structureFromImage(context, uri) } else null
-                        textDeferred?.await() to imageDeferred?.await()
-                    }
-                    if (aiText != null || aiImage != null) {
-                        parsed = mergeReportCards(parsed, aiText, aiImage)
-                        aiUsed = true
-                    }
+        // AI-assisted structuring is additive: it only replaces `parsed`
+        // if at least one pass actually produced a result, so a model
+        // that isn't downloaded, times out, or fails to parse never
+        // regresses below what the regex parser alone already found.
+        if (aiScanningEnabled) {
+            val textReady = AiModelManager.isReady(context, AiModel.TEXT)
+            val visionReady = AiModelManager.isReady(context, AiModel.VISION)
+            if (textReady || visionReady) {
+                val (aiText, aiImage) = coroutineScope {
+                    val textDeferred = if (textReady) async { AiReportParser.structureFromText(context, ocr.fullText) } else null
+                    val imageDeferred = if (visionReady) async { AiReportParser.structureFromImage(context, uri) } else null
+                    textDeferred?.await() to imageDeferred?.await()
+                }
+                if (aiText != null || aiImage != null) {
+                    parsed = mergeReportCards(parsed, aiText, aiImage)
                 }
             }
+        }
+        return parsed to ocr.fullText
+    }
+
+    suspend fun runOcr(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        status = if (uris.size > 1) "Processing ${uris.size} pages..." else "Processing image..."
+        try {
+            val pageResults = uris.mapIndexed { index, uri ->
+                if (uris.size > 1) status = "Processing page ${index + 1} of ${uris.size}..."
+                scanOneImage(uri)
+            }
+            rawText = if (pageResults.size == 1) {
+                pageResults[0].second
+            } else {
+                pageResults.mapIndexed { i, (_, text) -> "--- Page ${i + 1} ---\n$text" }.joinToString("\n\n")
+            }
+            // Cross-checks every page against every other: a field only one
+            // page's angle/focus/lighting caught still comes through, and no
+            // later (possibly worse) page can override an earlier good read.
+            val parsed = combineScannedPages(pageResults.map { it.first })
+            val aiUsed = aiScanningEnabled &&
+                (AiModelManager.isReady(context, AiModel.TEXT) || AiModelManager.isReady(context, AiModel.VISION))
 
             val matchedChild = NameMatcher.findBestMatch(children, parsed.studentName)
             pendingNewChildName = ""
@@ -262,21 +284,36 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
         }
     }
 
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) scope.launch { runOcr(uri) }
+    // Gallery import still accepts multiple images at once — picking several
+    // existing photos of the same report gets the same cross-checked-across-
+    // pages treatment as a live multi-page scan.
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isNotEmpty()) scope.launch { runOcr(uris) }
     }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        val uri = pendingCameraUri
-        if (success && uri != null) scope.launch { runOcr(uri) }
+
+    // Live document scanner (Google Play Services): a real camera
+    // viewfinder with auto-focus and auto-capture-when-steady, automatic
+    // edge detection + perspective correction, and support for capturing
+    // several pages/attempts in one session — replaces a single static
+    // photo, which is what was feeding low-quality images into OCR.
+    val scannerClient = remember {
+        GmsDocumentScanning.getClient(
+            GmsDocumentScannerOptions.Builder()
+                .setGalleryImportAllowed(false) // the Gallery button already covers this
+                .setPageLimit(5)
+                .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
+                .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+                .build(),
+        )
     }
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            val file = File(context.cacheDir, "captures").apply { mkdirs() }.resolve("capture_${System.currentTimeMillis()}.jpg")
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            pendingCameraUri = uri
-            cameraLauncher.launch(uri)
-        } else {
-            status = "Camera permission denied — use Gallery instead."
+    val scanLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uris = result.data?.let { GmsDocumentScanningResult.fromActivityResultIntent(it) }?.pages?.map { it.imageUri }
+            if (!uris.isNullOrEmpty()) {
+                scope.launch { runOcr(uris) }
+            } else {
+                status = "No pages captured."
+            }
         }
     }
 
@@ -326,20 +363,29 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
             )
 
             Text("Capture Report", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Live Scan opens a real-time camera view — it auto-focuses, " +
+                    "auto-captures once steady, crops/straightens the page, and " +
+                    "lets you capture more than one page or retry a blurry shot " +
+                    "in the same session before returning here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
-                    val granted = androidx.core.content.ContextCompat.checkSelfPermission(
-                        context, android.Manifest.permission.CAMERA,
-                    ) == PackageManager.PERMISSION_GRANTED
-                    if (granted) {
-                        val file = File(context.cacheDir, "captures").apply { mkdirs() }.resolve("capture_${System.currentTimeMillis()}.jpg")
-                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                        pendingCameraUri = uri
-                        cameraLauncher.launch(uri)
-                    } else {
-                        cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                    val activity = context as? Activity
+                    if (activity == null) {
+                        status = "Live scanner unavailable here — use Gallery instead."
+                        return@Button
                     }
-                }) { Text("Camera") }
+                    scannerClient.getStartScanIntent(activity)
+                        .addOnSuccessListener { intentSender ->
+                            scanLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
+                        }
+                        .addOnFailureListener { e ->
+                            status = "Live scanner unavailable (${e.message}) — use Gallery instead."
+                        }
+                }) { Text("Live Scan") }
                 Button(onClick = { galleryLauncher.launch("image/*") }) { Text("Gallery") }
             }
             if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

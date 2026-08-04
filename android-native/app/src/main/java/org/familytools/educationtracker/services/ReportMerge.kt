@@ -44,6 +44,45 @@ fun mergeReportCards(
     )
 }
 
+/** Combines the (already regex+AI merged) results from scanning MULTIPLE
+ * photos of the same report — the live document scanner supports capturing
+ * several pages/attempts in one session, e.g. a clear shot of Part-I and a
+ * closer one of Part-II, or simply retrying a blurry angle. The first page
+ * to successfully read a field wins that field (a later, possibly worse
+ * shot can never clobber an earlier good read); subject/co-curricular rows
+ * are unioned across every page so a subject only one page's framing caught
+ * still makes it into the result. */
+fun combineScannedPages(pages: List<ParsedReportCard>): ParsedReportCard {
+    if (pages.isEmpty()) return ParsedReportCard()
+    if (pages.size == 1) return pages[0]
+
+    fun pickString(selector: (ParsedReportCard) -> String) = pages.map(selector).firstOrNull { it.isNotBlank() } ?: ""
+    fun pickInt(selector: (ParsedReportCard) -> Int?) = pages.map(selector).firstOrNull { it != null }
+    fun pickName(selector: (ParsedReportCard) -> String) =
+        pages.map(selector).firstOrNull { it.isNotBlank() && looksLikeName(it) } ?: ""
+
+    // mergeRowsByName lets *later* sources win on a name collision; pages
+    // are reversed here so the actual first page (highest priority) is
+    // applied last and so wins, matching every other field's "first wins".
+    val reversedRowSources = pages.asReversed()
+    return ParsedReportCard(
+        studentName = pickName { it.studentName },
+        registerNo = pickString { it.registerNo },
+        schoolName = pickString { it.schoolName },
+        schoolAddress = pickString { it.schoolAddress },
+        className = pickString { it.className },
+        section = pickString { it.section },
+        academicYear = pickString { it.academicYear },
+        examType = pickString { it.examType },
+        examDate = pickString { it.examDate },
+        attendanceDaysPresent = pickInt { it.attendanceDaysPresent },
+        attendanceWorkingDays = pickInt { it.attendanceWorkingDays },
+        teacherRemarks = pickString { it.teacherRemarks },
+        subjectRows = mergeRowsByName(*reversedRowSources.map { it.subjectRows }.toTypedArray()),
+        coCurricularRows = mergeRowsByName(*reversedRowSources.map { it.coCurricularRows }.toTypedArray()),
+    )
+}
+
 /** At least 2 letters, and more letters than digits — rejects a register
  * number or other numeric/ID-like text masquerading as a name. */
 private fun looksLikeName(s: String): Boolean {

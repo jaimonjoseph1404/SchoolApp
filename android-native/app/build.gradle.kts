@@ -18,8 +18,8 @@ android {
         // Bump the 3rd (patch) digit of versionName, and versionCode by 1,
         // on every build handed off for install — not on every incidental
         // Gradle invocation during dev/test.
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
     }
 
     buildTypes {
@@ -92,6 +92,12 @@ dependencies {
 
     // Camera capture (system camera app via intent) + gallery/file picking
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+
+    // Live document scanner (Play Services) — real-time framing, auto-focus/
+    // auto-capture, edge detection + perspective correction, multi-page
+    // capture in one session. Replaces a single static camera photo, which
+    // is what was producing low-quality OCR input in the first place.
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
 
     // On-device AI (LiteRT-LM) — structures OCR'd/photographed report cards
     // into JSON via a local LLM, as a smarter layer on top of (not a
