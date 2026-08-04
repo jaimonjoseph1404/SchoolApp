@@ -39,6 +39,20 @@ android {
     }
 }
 
+// AGP's default output filename ("app-debug.apk") is the same for every
+// project — indistinguishable from any other app's debug build sitting in
+// the same Downloads/outputs folder. Name the actual built artifact itself,
+// not just a manually-copied duplicate.
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            if (output is com.android.build.api.variant.impl.VariantOutputImpl) {
+                output.outputFileName.set("SchoolApp-v${android.defaultConfig.versionName}-${variant.name}.apk")
+            }
+        }
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
