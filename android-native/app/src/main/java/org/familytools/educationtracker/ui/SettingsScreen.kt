@@ -116,7 +116,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
             )
 
             Text(
-                "Education Performance & Cost Tracker\nVersion 0.1.0 (Native, Phase 1)",
+                "Education Performance & Cost Tracker\nVersion ${org.familytools.educationtracker.BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

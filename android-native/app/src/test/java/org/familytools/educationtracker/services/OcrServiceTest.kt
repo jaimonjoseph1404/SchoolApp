@@ -117,6 +117,23 @@ class OcrServiceTest {
     }
 
     @Test
+    fun `never returns a register number or other numeric text as the student name`() {
+        // Regression: a real scan's studentName came back as "366/2023-24"
+        // (the register number) and got treated as a real name, creating a
+        // bogus child in the database.
+        val text = """
+            Progress Report : UNIT TEST I - 2025-2026
+            Student Name
+            366/2023-24
+            Class
+            III - C
+            S.No Part-I Max Min Score Avg Grade
+        """.trimIndent()
+        val parsed = OcrService.parseProgressReport(text, text.lines())
+        assertEquals("", parsed.studentName)
+    }
+
+    @Test
     fun `extracts full teacher remarks sentence, not just the first word`() {
         val parsed = OcrService.parseProgressReport(sampleReportText)
         assertEquals("With hard work and interest you are sure to do well next term.", parsed.teacherRemarks)

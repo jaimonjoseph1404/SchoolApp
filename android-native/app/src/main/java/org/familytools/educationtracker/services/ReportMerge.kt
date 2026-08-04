@@ -1,13 +1,17 @@
 package org.familytools.educationtracker.services
 
 /** Combines the regex parser's result with the (optional) AI results into
- * one [ParsedReportCard]. Per scalar field, prefers whichever non-blank
- * value is available, image-AI first (best shot at handwritten fields like
- * attendance) then text-AI then the regex parser. For subject/co-curricular
- * rows, unions by normalized name across all three sources rather than
- * picking one whole list — a subject only the regex parser found (or only
- * one AI pass found) still makes it into the result, and image-AI's grade
- * wins where the same subject appears in more than one source. */
+ * one [ParsedReportCard]. **The regex parser is the trusted source of
+ * truth** — it's deterministic, so it either read a cell correctly or left
+ * it blank; a small on-device model (Qwen3 0.6B / Gemma 4 E2B) can and does
+ * hallucinate plausible-looking-but-wrong values on dense tabular data (seen
+ * on a real scan: a subject's score silently replaced by a neighboring
+ * subject's score). So AI results only ever *fill in a blank the regex
+ * parser left* — image-AI first (best shot at handwritten fields like
+ * attendance), then text-AI — never overwrite a value regex already found.
+ * Subject/co-curricular rows are unioned by normalized name so a subject
+ * only an AI pass found still makes it in, but regex's row wins outright on
+ * any name collision. */
 fun mergeReportCards(
     regex: ParsedReportCard,
     aiText: ParsedReportCard?,
@@ -18,23 +22,34 @@ fun mergeReportCards(
 
     fun pickString(vararg values: String): String = values.firstOrNull { it.isNotBlank() } ?: ""
     fun pickInt(vararg values: Int?): Int? = values.firstOrNull { it != null }
+    // A name must actually look like a name — a register number ("366/2023-24")
+    // or other mostly-numeric text is never a valid pick here, from any source.
+    fun pickName(vararg values: String): String = values.firstOrNull { it.isNotBlank() && looksLikeName(it) } ?: ""
 
     return ParsedReportCard(
-        studentName = pickString(image.studentName, text.studentName, regex.studentName),
-        registerNo = pickString(image.registerNo, text.registerNo, regex.registerNo),
-        schoolName = pickString(image.schoolName, text.schoolName, regex.schoolName),
-        schoolAddress = pickString(image.schoolAddress, text.schoolAddress, regex.schoolAddress),
-        className = pickString(image.className, text.className, regex.className),
-        section = pickString(image.section, text.section, regex.section),
-        academicYear = pickString(image.academicYear, text.academicYear, regex.academicYear),
-        examType = pickString(image.examType, text.examType, regex.examType),
-        examDate = pickString(image.examDate, text.examDate, regex.examDate),
-        attendanceDaysPresent = pickInt(image.attendanceDaysPresent, text.attendanceDaysPresent, regex.attendanceDaysPresent),
-        attendanceWorkingDays = pickInt(image.attendanceWorkingDays, text.attendanceWorkingDays, regex.attendanceWorkingDays),
-        teacherRemarks = pickString(image.teacherRemarks, text.teacherRemarks, regex.teacherRemarks),
-        subjectRows = mergeRowsByName(regex.subjectRows, text.subjectRows, image.subjectRows),
-        coCurricularRows = mergeRowsByName(regex.coCurricularRows, text.coCurricularRows, image.coCurricularRows),
+        studentName = pickName(regex.studentName, image.studentName, text.studentName),
+        registerNo = pickString(regex.registerNo, image.registerNo, text.registerNo),
+        schoolName = pickString(regex.schoolName, image.schoolName, text.schoolName),
+        schoolAddress = pickString(regex.schoolAddress, image.schoolAddress, text.schoolAddress),
+        className = pickString(regex.className, image.className, text.className),
+        section = pickString(regex.section, image.section, text.section),
+        academicYear = pickString(regex.academicYear, image.academicYear, text.academicYear),
+        examType = pickString(regex.examType, image.examType, text.examType),
+        examDate = pickString(regex.examDate, image.examDate, text.examDate),
+        attendanceDaysPresent = pickInt(regex.attendanceDaysPresent, image.attendanceDaysPresent, text.attendanceDaysPresent),
+        attendanceWorkingDays = pickInt(regex.attendanceWorkingDays, image.attendanceWorkingDays, text.attendanceWorkingDays),
+        teacherRemarks = pickString(regex.teacherRemarks, image.teacherRemarks, text.teacherRemarks),
+        subjectRows = mergeRowsByName(image.subjectRows, text.subjectRows, regex.subjectRows),
+        coCurricularRows = mergeRowsByName(image.coCurricularRows, text.coCurricularRows, regex.coCurricularRows),
     )
+}
+
+/** At least 2 letters, and more letters than digits — rejects a register
+ * number or other numeric/ID-like text masquerading as a name. */
+private fun looksLikeName(s: String): Boolean {
+    val letters = s.count { it.isLetter() }
+    val digits = s.count { it.isDigit() }
+    return letters >= 2 && letters > digits
 }
 
 /** Later lists win on overlapping (normalized) subject names, but rows only

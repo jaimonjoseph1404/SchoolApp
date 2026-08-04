@@ -273,7 +273,13 @@ object OcrService {
         // often in the header than in the marks table, which already got
         // this treatment.
         val header = headerText(layoutRows.joinToString("\n"))
-        val studentName = extractStudentName(header)
+        // A misfiring capture (e.g. matching a register-number line by
+        // mistake) must never surface as a "name" — at least 2 letters and
+        // more letters than digits, or it's discarded rather than risking
+        // an auto-created child named "366/2023-24".
+        val studentName = extractStudentName(header).let {
+            if (it.count { c -> c.isLetter() } >= 2 && it.count { c -> c.isLetter() } > it.count { c -> c.isDigit() }) it else ""
+        }
         val registerNo = captureField(header, "Regi?ster\\s*No\\.?")
 
         val preHeaderLines = header.lines().map { it.trim() }.filter { it.isNotEmpty() }
@@ -318,7 +324,15 @@ object OcrService {
 
         var examType = ""
         var academicYear = ""
-        Regex("Progress\\s*Report\\s*[:\\-]?\\s*(.+)", RegexOption.IGNORE_CASE).find(header)?.groupValues?.get(1)?.let { rest ->
+        // Bounded the same way captureField bounds its captures: on a
+        // photographed table, layout reconstruction can merge the exam-title
+        // row with the very next row (e.g. "Student Name ...") if their
+        // bounding boxes land close together — an unbounded ".+" here used
+        // to swallow the whole rest of the header into examType/term.
+        Regex(
+            "Progress\\s*Report\\s*[:\\-]?\\s*(.+?)(?=\\s{2,}|\\s+(?:Student|Name|Class|Register|Roll)\\b|\\n|$)",
+            RegexOption.IGNORE_CASE,
+        ).find(header)?.groupValues?.get(1)?.let { rest ->
             val trimmed = rest.trim()
             val yearSplit = Regex("^(.*?)\\s*-\\s*(\\d{4}(?:-\\d{2,4})?)$").find(trimmed)
             if (yearSplit != null) {

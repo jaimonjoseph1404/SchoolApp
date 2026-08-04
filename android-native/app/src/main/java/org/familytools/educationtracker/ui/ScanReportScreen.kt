@@ -77,6 +77,13 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
     var showDuplicateDialog by remember { mutableStateOf(false) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var templateAutoLoaded by remember { mutableStateOf(false) }
+    // A scanned name that didn't match an existing child is only *staged*
+    // here — the Child row itself isn't created until Save is actually
+    // pressed, so cancelling out of a scan (back button, another scan,
+    // leaving the screen) never writes anything to the database.
+    var pendingNewChildName by remember { mutableStateOf("") }
+    var pendingNewChildSchool by remember { mutableStateOf("") }
+    var pendingNewChildAdmissionNumber by remember { mutableStateOf("") }
 
     // Adds any template subject/activity not already present as a blank row
     // (marks left for the user to fill in) — used both to auto-complete an
@@ -112,23 +119,41 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
     }
 
     fun doSave(force: Boolean) {
-        viewModel.saveExam(
-            year, className, section, term, examType, examDate, rows,
-            coCurricularRows = coCurricularRows,
-            attendanceDaysPresent = daysPresent.toIntOrNull(),
-            attendanceWorkingDays = workingDays.toIntOrNull(),
-            teacherRemarks = teacherRemarksText,
-            force = force,
-            onDone = {
-                rows = listOf(MarkFormRow())
-                coCurricularRows = emptyList()
-                status = ""
-                showDuplicateDialog = false
-                scope.launch { snackbarHostState.showSnackbar("Report saved") }
-            },
-            onError = { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } },
-            onDuplicate = { showDuplicateDialog = true },
-        )
+        scope.launch {
+            // The one and only place a scanned-but-unmatched name actually
+            // creates a Child record — deliberately gated behind the user
+            // pressing Save, not merely scanning a photo.
+            if (selectedChildId == null && pendingNewChildName.isNotBlank()) {
+                val child = viewModel.findOrCreateChildByName(
+                    name = pendingNewChildName,
+                    schoolName = pendingNewChildSchool,
+                    admissionNumber = pendingNewChildAdmissionNumber,
+                    currentClass = className,
+                    section = section,
+                    academicYear = year,
+                )
+                selectedChildName = child.fullName
+                viewModel.selectChild(child.id)
+                pendingNewChildName = ""
+            }
+            viewModel.saveExam(
+                year, className, section, term, examType, examDate, rows,
+                coCurricularRows = coCurricularRows,
+                attendanceDaysPresent = daysPresent.toIntOrNull(),
+                attendanceWorkingDays = workingDays.toIntOrNull(),
+                teacherRemarks = teacherRemarksText,
+                force = force,
+                onDone = {
+                    rows = listOf(MarkFormRow())
+                    coCurricularRows = emptyList()
+                    status = ""
+                    showDuplicateDialog = false
+                    scope.launch { snackbarHostState.showSnackbar("Report saved") }
+                },
+                onError = { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } },
+                onDuplicate = { showDuplicateDialog = true },
+            )
+        }
     }
 
     suspend fun runOcr(uri: Uri) {
@@ -160,22 +185,17 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
                 }
             }
 
-            var matchedChild = NameMatcher.findBestMatch(children, parsed.studentName)
-            var createdNewChild = false
-            if (matchedChild == null && parsed.studentName.isNotBlank()) {
-                matchedChild = viewModel.findOrCreateChildByName(
-                    name = parsed.studentName,
-                    schoolName = parsed.schoolName,
-                    admissionNumber = parsed.registerNo,
-                    currentClass = parsed.className,
-                    section = parsed.section,
-                    academicYear = parsed.academicYear,
-                )
-                createdNewChild = true
-            }
+            val matchedChild = NameMatcher.findBestMatch(children, parsed.studentName)
+            pendingNewChildName = ""
             if (matchedChild != null) {
                 selectedChildName = matchedChild.fullName
                 viewModel.selectChild(matchedChild.id)
+            } else if (parsed.studentName.isNotBlank()) {
+                // Stage only — the Child row is created at Save time, not
+                // just from having scanned a photo (see doSave()).
+                pendingNewChildName = parsed.studentName
+                pendingNewChildSchool = parsed.schoolName
+                pendingNewChildAdmissionNumber = parsed.registerNo
             }
             if (parsed.academicYear.isNotBlank()) year = parsed.academicYear
             if (parsed.className.isNotBlank()) className = parsed.className
@@ -220,9 +240,10 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
             }
 
             val childNote = when {
-                createdNewChild -> "Added new child: ${matchedChild?.fullName}."
                 matchedChild != null -> "Matched child: ${matchedChild.fullName}."
-                parsed.studentName.isNotBlank() -> "Couldn't match \"${parsed.studentName}\" to an enrolled child — select manually."
+                pendingNewChildName.isNotBlank() ->
+                    "New child \"$pendingNewChildName\" will be added when you press Save (or pick an existing child below)."
+                parsed.studentName.isNotBlank() -> "Read a name but it didn't look valid — select the child manually."
                 else -> "Couldn't read a student name — select the child manually."
             }
             val templateNote = if (addedFromTemplate > 0) {
