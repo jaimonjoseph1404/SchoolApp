@@ -122,6 +122,86 @@ class OcrServiceTest {
         assertEquals("With hard work and interest you are sure to do well next term.", parsed.teacherRemarks)
     }
 
+    // Regression, from a real photographed report (Unit Test I, ARDON JAIMON,
+    // III-C) where studentName/className NEVER extracted on-device despite
+    // working in every hand-transcribed test above. Root cause: those tests
+    // all put "Student Name ARDON JAIMON Class III - C" on one flat-text
+    // line, but this report prints it as a *bordered table* — ML Kit reads
+    // "Student Name", "ARDON JAIMON", "Class", "III - C" as four separate
+    // lines. The old parser only ever looked at flat OCR text for the header,
+    // never the Y-reconstructed layoutRows already used for the marks table.
+    private val bordlayoutRows = listOf(
+        "AUXILIUM SCHOOL(ICSE) KA098",
+        "Bandapura Village, Old Madras Road, Virgonagar PO",
+        "Bangalore - 560 049 Ph: 8497825305",
+        "Progress Report : UNIT TEST I - 2025-2026",
+        "Student Name",
+        "ARDON JAIMON",
+        "Class",
+        "III - C",
+        "Register No",
+        "366/2023-24",
+        "S.No Part-I Max Min Score Avg Grade",
+        "1 English - I Theory 100 40 68 68 B",
+        "PART - II Co - Curricular Activities and Character Traits",
+        "PT / Games A Courteous A A-Excellent",
+        "Eng Read & Recitation A Obedience A B-Good",
+        "II Lang Sp. Writing B Leadership A C-Fair",
+        "III Lang Sp. Writing A Punctuality A D-Satisfactory",
+        "Cleanliness A E-Unsatisfactory",
+        "Attendance 26/26",
+    )
+
+    @Test
+    fun `recovers student name and class from a bordered header split across separate OCR lines`() {
+        // layoutRows here IS the Y-reconstruction (still one cell per line —
+        // reconstruction can't always merge a label cell with a value cell
+        // of different height); the flat text arg is irrelevant to header
+        // parsing now that header comes from layoutRows.
+        val parsed = OcrService.parseProgressReport(bordlayoutRows.joinToString("\n"), bordlayoutRows)
+        assertEquals("ARDON JAIMON", parsed.studentName)
+        assertEquals("III", parsed.className)
+        assertEquals("C", parsed.section)
+        assertEquals("366/2023-24", parsed.registerNo)
+    }
+
+    @Test
+    fun `still finds student name and class when layout reconstruction does merge the row`() {
+        // The common/better case: reconstructRows already merged same-height
+        // fragments into one row, so it reads exactly like the free-text
+        // reports this parser was originally built against.
+        val merged = listOf(
+            "AUXILIUM SCHOOL(ICSE) KA098",
+            "Progress Report : UNIT TEST I - 2025-2026",
+            "Student Name ARDON JAIMON Class III - C",
+            "Register No 366/2023-24",
+            "S.No Part-I Max Min Score Avg Grade",
+        )
+        val parsed = OcrService.parseProgressReport(merged.joinToString("\n"), merged)
+        assertEquals("ARDON JAIMON", parsed.studentName)
+        assertEquals("III", parsed.className)
+        assertEquals("C", parsed.section)
+    }
+
+    @Test
+    fun `handles a dash-style grading legend (A-Excellent) without losing or corrupting co-curricular rows`() {
+        // This report's legend prints "A-Excellent" as a single OCR token
+        // (no space, unlike "A: Excellent" elsewhere) — must not be mistaken
+        // for part of an activity name, and must not swallow the next row.
+        val parsed = OcrService.parseProgressReport(bordlayoutRows.joinToString("\n"), bordlayoutRows)
+        assertEquals(26, parsed.attendanceDaysPresent)
+        assertEquals(26, parsed.attendanceWorkingDays)
+        val names = parsed.coCurricularRows.map { it.subject }.toSet()
+        assertEquals(
+            setOf(
+                "PT / Games", "Courteous", "Eng Read & Recitation", "Obedience",
+                "II Lang Sp. Writing", "Leadership", "III Lang Sp. Writing", "Punctuality", "Cleanliness",
+            ),
+            names,
+        )
+        assertTrue(parsed.coCurricularRows.none { it.subject.contains("Excellent", ignoreCase = true) })
+    }
+
     @Test
     fun `extracts all nine subject rows with correct values, skipping header and total`() {
         val parsed = OcrService.parseProgressReport(sampleReportText)

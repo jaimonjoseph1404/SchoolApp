@@ -123,7 +123,19 @@ object OcrService {
             "$labelPattern\\s*[:\\-]?\\s*(.+?)(?=\\s{2,}|$stopBranch\\n|$)",
             RegexOption.IGNORE_CASE,
         )
-        return regex.find(text)?.groupValues?.get(1)?.trim(' ', ':', '-')?.trim().orEmpty()
+        val sameLine = regex.find(text)?.groupValues?.get(1)?.trim(' ', ':', '-')?.trim().orEmpty()
+        if (sameLine.isNotEmpty()) return sameLine
+
+        // Fallback: a bordered-table report card can have the label alone in
+        // one cell/line with the value in the next — same failure mode
+        // already handled for teacher's remarks, generalized here so it
+        // covers the student name / register number too (real-device photos
+        // of a bordered header hit this far more than the free-text layout
+        // this parser was originally tuned against).
+        val labelOnlyLine = Regex("^$labelPattern\\s*[:\\-]?\\s*$", RegexOption.IGNORE_CASE)
+        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val idx = lines.indexOfFirst { labelOnlyLine.matches(it) }
+        return if (idx in 0 until lines.size - 1) lines[idx + 1] else ""
     }
 
     private val studentNameLabel =
@@ -253,7 +265,14 @@ object OcrService {
      * split so pure-text callers (tests, previously-extracted text) still
      * work without layout information. */
     fun parseProgressReport(text: String, layoutRows: List<String> = text.lines()): ParsedReportCard {
-        val header = headerText(text)
+        // Header fields are extracted from the Y-reconstructed rows, not the
+        // flat OCR text — a bordered table (the common report-card header
+        // layout: "Student Name | ARDON JAIMON | Class | III - C" as one
+        // visual row split across separate table cells) gets ML Kit's own
+        // line breaks in the middle of what's logically one row far more
+        // often in the header than in the marks table, which already got
+        // this treatment.
+        val header = headerText(layoutRows.joinToString("\n"))
         val studentName = extractStudentName(header)
         val registerNo = captureField(header, "Regi?ster\\s*No\\.?")
 
@@ -277,6 +296,25 @@ object OcrService {
                 RegexOption.IGNORE_CASE,
             ).find(header)?.let { className = it.groupValues[1].trim() }
         }
+        if (className.isEmpty()) {
+            // Same "label alone on its own line" fallback as captureField —
+            // applied here too since class/section uses its own regex
+            // rather than captureField.
+            val lines = header.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            val idx = lines.indexOfFirst { Regex("^Class\\s*[:\\-]?$", RegexOption.IGNORE_CASE).matches(it) }
+            val valueLine = if (idx in 0 until lines.size - 1) lines[idx + 1] else null
+            if (valueLine != null) {
+                Regex(
+                    "^((?:$ROMAN_CLASS|1[0-2]|[1-9]))\\s*-\\s*([A-Za-z])\\b",
+                    RegexOption.IGNORE_CASE,
+                ).find(valueLine)?.let {
+                    className = it.groupValues[1].trim()
+                    section = it.groupValues[2].trim().uppercase()
+                } ?: Regex("^((?:$ROMAN_CLASS|1[0-2]|[1-9]))\\b", RegexOption.IGNORE_CASE).find(valueLine)?.let {
+                    className = it.groupValues[1].trim()
+                }
+            }
+        }
 
         var examType = ""
         var academicYear = ""
@@ -298,12 +336,10 @@ object OcrService {
         val attendanceDaysPresent = attendanceMatch?.groupValues?.get(1)?.toIntOrNull()
         val attendanceWorkingDays = attendanceMatch?.groupValues?.get(2)?.toIntOrNull()
 
-        var teacherRemarks = captureField(text, "Teacher'?s?\\s*Remarks?", stopWords = emptyList())
-        if (teacherRemarks.isEmpty()) {
-            val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
-            val idx = lines.indexOfFirst { Regex("Teacher'?s?\\s*Remarks?", RegexOption.IGNORE_CASE).containsMatchIn(it) }
-            if (idx in 0 until lines.size - 1) teacherRemarks = lines[idx + 1]
-        }
+        // captureField's own next-line fallback (see above) now covers the
+        // "label alone on its own line" case that used to be handled here
+        // by hand.
+        val teacherRemarks = captureField(text, "Teacher'?s?\\s*Remarks?", stopWords = emptyList())
 
         // Layout-reconstructed rows catch table rows ML Kit split across
         // multiple lines; fall back to (and merge with) the plain-text
