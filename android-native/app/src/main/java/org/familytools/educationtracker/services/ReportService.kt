@@ -23,7 +23,28 @@ object ReportService {
     private fun reportsDir(context: Context): File =
         File(context.getExternalFilesDir(null), "reports").apply { mkdirs() }
 
-    fun academicSummaryPdf(context: Context, childName: String, rows: List<MarkHistoryRow>): File {
+    /** Breaks [text] into lines no wider than [maxWidth] under [paint] —
+     * table cell values are always short enough to draw as-is, but
+     * insight sentences aren't, so those need real wrapping to stay
+     * on the page instead of running off the right edge. */
+    private fun wrapText(paint: Paint, text: String, maxWidth: Float): List<String> {
+        val words = text.split(" ")
+        val lines = mutableListOf<String>()
+        var current = StringBuilder()
+        for (word in words) {
+            val candidate = if (current.isEmpty()) word else "$current $word"
+            if (paint.measureText(candidate) > maxWidth && current.isNotEmpty()) {
+                lines.add(current.toString())
+                current = StringBuilder(word)
+            } else {
+                current = StringBuilder(candidate)
+            }
+        }
+        if (current.isNotEmpty()) lines.add(current.toString())
+        return lines
+    }
+
+    fun academicSummaryPdf(context: Context, childName: String, rows: List<MarkHistoryRow>, insights: List<String> = emptyList()): File {
         val file = File(reportsDir(context), timestampedName("academic_summary_$childName", "pdf"))
         val document = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create() // A4 at 72dpi
@@ -60,6 +81,30 @@ object ReportService {
                 val values = listOf(r.yearLabel, r.className, r.termName, r.examType, r.subjectName, marks, pct, r.grade.ifBlank { "-" })
                 values.forEachIndexed { i, v -> canvas.drawText(v, colX[i], y, bodyPaint) }
                 y += 14f
+            }
+        }
+
+        if (insights.isNotEmpty()) {
+            if (y > 720f) {
+                document.finishPage(page)
+                page = document.startPage(pageInfo)
+                canvas = page.canvas
+                y = 40f
+            }
+            y += 20f
+            canvas.drawText("Performance Insights", 24f, y, headerPaint)
+            y += 16f
+            for (line in insights) {
+                for (wrapped in wrapText(bodyPaint, "•  $line", 540f)) {
+                    if (y > 800f) {
+                        document.finishPage(page)
+                        page = document.startPage(pageInfo)
+                        canvas = page.canvas
+                        y = 40f
+                    }
+                    canvas.drawText(wrapped, 24f, y, bodyPaint)
+                    y += 14f
+                }
             }
         }
         document.finishPage(page)

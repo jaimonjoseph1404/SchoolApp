@@ -77,7 +77,11 @@ fun ExpensesScreen(viewModel: ExpenseViewModel, onBack: () -> Unit, onScanReceip
                 items(expenses, key = { it.id }) { e ->
                     val details = listOfNotNull(e.expenseDate.ifBlank { null }, e.description.ifBlank { null }).joinToString(" · ")
                     ListItem(
-                        headlineContent = { Text("${e.categoryName} — Rs. %,.2f".format(e.amount)) },
+                        // categoryName is free-typed by the user — splicing it into the
+                        // format template (instead of after formatting) would crash if
+                        // it ever contains a literal "%" (real device regression, see
+                        // AnalyticsScreen's confidence-percentage crash).
+                        headlineContent = { Text("${e.categoryName} — Rs. " + "%,.2f".format(e.amount)) },
                         supportingContent = { Text(details.ifBlank { "No details" }) },
                         trailingContent = {
                             IconButton(onClick = { viewModel.deleteExpense(e.id) }) {

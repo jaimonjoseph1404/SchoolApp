@@ -111,6 +111,35 @@ class AnalyticsEngine(private val academicDao: AcademicDao, private val expenseD
         return insights
     }
 
+    /** Concrete, actionable suggestions (not just observations) for subjects
+     * that are either weak (below 50% average) or trending downward —
+     * what a parent should actually consider doing next, not just a chart
+     * of what already happened. */
+    fun improvementActions(rows: List<MarkHistoryRow>): List<String> {
+        val actions = mutableListOf<String>()
+        val averages = subjectAverages(rows)
+        for (subject in averages.keys.sorted()) {
+            val avg = averages.getValue(subject)
+            val declining = predictSubject(rows, subject).trend == "declining"
+            val weak = avg < 50.0
+            when {
+                declining && weak -> actions.add(
+                    "$subject: low (%.0f%% avg) and declining — prioritize this subject with focused daily practice or a tutor.".format(avg),
+                )
+                declining -> actions.add(
+                    "$subject: trending down — review recent test papers together to catch the specific topics slipping.",
+                )
+                weak -> actions.add(
+                    "$subject: averaging %.0f%% — targeted revision before the next exam could help.".format(avg),
+                )
+            }
+        }
+        if (actions.isEmpty() && averages.isNotEmpty()) {
+            actions.add("No subject currently needs urgent attention — keep up the consistent revision routine.")
+        }
+        return actions
+    }
+
     fun subjectRiskScores(rows: List<MarkHistoryRow>): Map<String, Double> =
         subjectAverages(rows).mapValues { (subject, avg) ->
             val pred = predictSubject(rows, subject)

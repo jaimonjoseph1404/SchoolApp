@@ -19,6 +19,7 @@ import org.familytools.educationtracker.data.MarkHistoryRow
 import org.familytools.educationtracker.data.Teacher
 import org.familytools.educationtracker.data.TeacherDao
 import org.familytools.educationtracker.data.TeacherEffectivenessRow
+import org.familytools.educationtracker.services.AnalyticsEngine
 import org.familytools.educationtracker.services.ReportService
 import java.io.File
 
@@ -28,6 +29,7 @@ class ReportsViewModel(
     private val teacherDao: TeacherDao,
     childDao: ChildDao,
 ) : ViewModel() {
+    val engine = AnalyticsEngine(academicDao, expenseDao)
     val children: StateFlow<List<org.familytools.educationtracker.data.Child>> = childDao.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val teachers: StateFlow<List<Teacher>> = teacherDao.observeAll()
@@ -58,8 +60,30 @@ class ReportsViewModel(
     fun generateAcademicPdf(context: Context, childId: Long, childName: String, onDone: (File) -> Unit) {
         viewModelScope.launch {
             val list = academicDao.observeMarksHistory(childId).first()
-            onDone(ReportService.academicSummaryPdf(context, childName, list))
+            onDone(ReportService.academicSummaryPdf(context, childName, list, performanceInsights(list)))
         }
+    }
+
+    /** Overall trend + subject-wise averages/trend + concrete improvement
+     * actions — the "more insight" layer on top of the raw marks table,
+     * shared by both the on-screen preview and the exported PDF so they
+     * never drift apart. */
+    fun performanceInsights(rows: List<MarkHistoryRow>): List<String> {
+        val lines = mutableListOf<String>()
+        val overall = engine.predictOverall(rows)
+        if (overall.predictedValue != null) {
+            lines.add("Overall performance: ${overall.trend} (next exam projected around %.1f%%).".format(overall.predictedValue))
+        } else {
+            lines.add("Overall performance: not enough exams yet to establish a trend.")
+        }
+        val averages = engine.subjectAverages(rows)
+        for (subject in averages.keys.sorted()) {
+            val avg = averages.getValue(subject)
+            val trend = engine.predictSubject(rows, subject).trend
+            lines.add("$subject: average %.1f%% ($trend).".format(avg))
+        }
+        lines.addAll(engine.improvementActions(rows))
+        return lines
     }
 
     fun generateExpenseCsv(context: Context, childId: Long, childName: String, onDone: (File) -> Unit) {

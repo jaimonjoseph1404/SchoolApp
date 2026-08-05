@@ -33,12 +33,16 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel, onBack: () -> Unit) {
     val childId by viewModel.selectedChildId.collectAsState()
     var selectedChildName by remember { mutableStateOf("") }
 
+    var selectedSubject by remember { mutableStateOf("") }
+
     val engine = viewModel.engine
     val trend = engine.percentageTrend(rows)
     val averages = engine.subjectAverages(rows)
     val overall = engine.predictOverall(rows)
     val insights = engine.generateInsights(rows)
     val riskScores = engine.subjectRiskScores(rows)
+    val improvementActions = engine.improvementActions(rows)
+    val subjectNames = averages.keys.sorted()
 
     val growth by produceState(initialValue = null as org.familytools.educationtracker.services.Prediction?, childId) {
         value = childId?.let { engine.expenseYearlyGrowth(it) }
@@ -69,11 +73,28 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel, onBack: () -> Unit) {
                 LineChartView(trend, "Overall Percentage Trend")
                 RadarChartView(averages, "Subject Strengths")
 
+                if (subjectNames.isNotEmpty()) {
+                    Text("Subject Trend", style = MaterialTheme.typography.titleMedium)
+                    EntityDropdownField(
+                        "Subject", subjectNames, selectedSubject.ifBlank { "Select a subject" }, { it },
+                        { selectedSubject = it },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (selectedSubject.isNotBlank()) {
+                        LineChartView(engine.subjectTrend(rows, selectedSubject), "$selectedSubject — by Term")
+                    }
+                }
+
                 Text("Predictions", style = MaterialTheme.typography.titleMedium)
                 val lines = buildList {
                     if (overall.predictedValue != null) {
+                        // conf is already-formatted text (and itself contains a literal
+                        // "%") — it must be appended AFTER formatting, never spliced into
+                        // the format template itself, or String.format chokes on the
+                        // stray "%)" left in the template (crashed with
+                        // UnknownFormatConversionException on a real device).
                         val conf = overall.confidence?.let { " (confidence %.0f%%)".format(it * 100) } ?: ""
-                        add("Expected next exam average: %.1f%%$conf".format(overall.predictedValue))
+                        add("Expected next exam average: %.1f%%".format(overall.predictedValue) + conf)
                         add("Trend: ${overall.trend}")
                     } else {
                         add("Add more exams to unlock score predictions.")
@@ -87,6 +108,9 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel, onBack: () -> Unit) {
 
                 Text("AI Insights", style = MaterialTheme.typography.titleMedium)
                 insights.forEach { Text("•  $it", style = MaterialTheme.typography.bodyMedium) }
+
+                Text("Improvement Actions", style = MaterialTheme.typography.titleMedium)
+                improvementActions.forEach { Text("•  $it", style = MaterialTheme.typography.bodyMedium) }
             }
         }
     }

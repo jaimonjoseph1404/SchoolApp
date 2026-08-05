@@ -89,6 +89,11 @@ fun ReportsScreen(viewModel: ReportsViewModel, onBack: () -> Unit) {
                 if (academicPreview.isEmpty()) {
                     Text("No academic records yet.", style = MaterialTheme.typography.bodySmall)
                 } else {
+                    Text("Performance Insights", style = MaterialTheme.typography.titleSmall)
+                    viewModel.performanceInsights(academicPreview).forEach {
+                        Text("•  $it", style = MaterialTheme.typography.bodySmall)
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     academicPreview.forEach { row ->
                         Text(
                             "${row.yearLabel} · ${row.className} · ${row.termName} · ${row.examType} — " +
@@ -105,7 +110,10 @@ fun ReportsScreen(viewModel: ReportsViewModel, onBack: () -> Unit) {
                 } else {
                     expensePreview.forEach { row ->
                         Text(
-                            "${row.expenseDate.ifBlank { "-" }} · ${row.categoryName} — Rs. %,.2f".format(row.amount),
+                            // categoryName is free-typed — format only the numeric part,
+                            // then concatenate, so a literal "%" in the category name
+                            // can't break String.format's template parsing.
+                            "${row.expenseDate.ifBlank { "-" }} · ${row.categoryName} — Rs. " + "%,.2f".format(row.amount),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }

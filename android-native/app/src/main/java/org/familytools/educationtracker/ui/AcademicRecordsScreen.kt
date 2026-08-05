@@ -11,9 +11,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -127,13 +127,68 @@ fun AcademicRecordsScreen(viewModel: AcademicRecordsViewModel, onBack: () -> Uni
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Save Marks") }
 
-            Text("Recent Marks", style = MaterialTheme.typography.titleMedium)
-            history.takeLast(30).reversed().forEach { r ->
-                val pctText = r.percentage?.let { " (%.1f%%)".format(it) } ?: ""
-                ListItem(
-                    headlineContent = { Text("${r.subjectName}: ${r.marksObtained}/${r.maxMarks}$pctText") },
-                    supportingContent = { Text("${r.yearLabel} · ${r.className} · ${r.termName} · ${r.examType}") },
-                )
+            Text("Complete Mark History", style = MaterialTheme.typography.titleMedium)
+            if (history.isEmpty()) {
+                Text("No academic records yet.", style = MaterialTheme.typography.bodySmall)
+            } else {
+                MarkHistoryByYear(history)
+            }
+        }
+    }
+}
+
+/** Groups the full (uncapped) mark history by year, then by exam (term +
+ * exam type + class), so a parent can see every subject's actual score for
+ * a specific term rather than a flat, most-recent-30 list that could hide
+ * an entire earlier term. */
+@Composable
+private fun MarkHistoryByYear(history: List<org.familytools.educationtracker.data.MarkHistoryRow>) {
+    val byYear = history.groupBy { it.yearLabel }.toSortedMap(compareByDescending { it })
+    byYear.forEach { (year, yearRows) ->
+        Text(year.ifBlank { "Year not set" }, style = MaterialTheme.typography.titleSmall)
+        val byExam = yearRows.groupBy { Triple(it.className, it.termName, it.examType) }
+        byExam.forEach { (key, examRows) ->
+            val (className, termName, examType) = key
+            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "$termName — $examType (Class $className)",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    examRows.forEach { r ->
+                        val marks = if (r.marksObtained != null && r.maxMarks != null) {
+                            "${r.marksObtained}/${r.maxMarks}"
+                        } else {
+                            "-"
+                        }
+                        val pctText = r.percentage?.let { " (%.1f%%)".format(it) } ?: ""
+                        Text(
+                            "${r.subjectName}: $marks$pctText ${r.grade.ifBlank { "" }}".trim(),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    val first = examRows.first()
+                    val total = if (first.totalMarksObtained != null && first.totalMaxMarks != null) {
+                        "Total: ${first.totalMarksObtained}/${first.totalMaxMarks}"
+                    } else {
+                        null
+                    }
+                    val attendance = if (first.attendanceDaysPresent != null && first.attendanceWorkingDays != null) {
+                        "Attendance: ${first.attendanceDaysPresent}/${first.attendanceWorkingDays}"
+                    } else {
+                        null
+                    }
+                    listOfNotNull(total, attendance).forEach {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (first.teacherRemarks.isNotBlank()) {
+                        Text(
+                            "Remarks: ${first.teacherRemarks}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }
