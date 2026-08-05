@@ -162,6 +162,24 @@ class ReportMergeTest {
     }
 
     @Test
+    fun `cloud AI (Gemini) fills a blank regex left, ahead of the on-device image and text passes`() {
+        val regex = ParsedReportCard(className = "")
+        val cloud = ParsedReportCard(className = "III")
+        val image = ParsedReportCard(className = "V")
+        val text = ParsedReportCard(className = "VI")
+        val merged = mergeReportCards(regex, aiText = text, aiImage = image, aiCloud = cloud)
+        assertEquals("III", merged.className)
+    }
+
+    @Test
+    fun `regex still wins over cloud AI when regex already found a value`() {
+        val regex = ParsedReportCard(studentName = "ARDON JAIMON")
+        val cloud = ParsedReportCard(studentName = "WRONG NAME")
+        val merged = mergeReportCards(regex, aiText = null, aiImage = null, aiCloud = cloud)
+        assertEquals("ARDON JAIMON", merged.studentName)
+    }
+
+    @Test
     fun `pickInt returns null rather than 0 when nothing has a value`() {
         val merged = mergeReportCards(ParsedReportCard(), null, null)
         assertNull(merged.attendanceDaysPresent)

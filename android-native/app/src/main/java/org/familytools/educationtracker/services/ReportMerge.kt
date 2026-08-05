@@ -7,18 +7,24 @@ package org.familytools.educationtracker.services
  * hallucinate plausible-looking-but-wrong values on dense tabular data (seen
  * on a real scan: a subject's score silently replaced by a neighboring
  * subject's score). So AI results only ever *fill in a blank the regex
- * parser left* — image-AI first (best shot at handwritten fields like
- * attendance), then text-AI — never overwrite a value regex already found.
- * Subject/co-curricular rows are unioned by normalized name so a subject
- * only an AI pass found still makes it in, but regex's row wins outright on
- * any name collision. */
+ * parser left*, in priority order: cloud AI (Gemini — a full-size model
+ * reading the actual photo, when the user has opted in with their own API
+ * key) first, then image-AI (best shot at handwritten fields like
+ * attendance), then text-AI — never overwriting a value regex already
+ * found. Subject/co-curricular rows are unioned by normalized name so a
+ * subject only an AI pass found still makes it in, but regex's row wins
+ * outright on any name collision. [aiCloud] is appended (not inserted)
+ * as the last parameter so every existing positional call site keeps its
+ * original meaning. */
 fun mergeReportCards(
     regex: ParsedReportCard,
     aiText: ParsedReportCard?,
     aiImage: ParsedReportCard?,
+    aiCloud: ParsedReportCard? = null,
 ): ParsedReportCard {
     val text = aiText ?: ParsedReportCard()
     val image = aiImage ?: ParsedReportCard()
+    val cloud = aiCloud ?: ParsedReportCard()
 
     fun pickString(vararg values: String): String = values.firstOrNull { it.isNotBlank() } ?: ""
     fun pickInt(vararg values: Int?): Int? = values.firstOrNull { it != null }
@@ -28,22 +34,28 @@ fun mergeReportCards(
     fun pickName(vararg values: String): String = values.firstOrNull { it.isNotBlank() && looksLikeName(it) } ?: ""
 
     return ParsedReportCard(
-        studentName = pickName(regex.studentName, image.studentName, text.studentName),
-        registerNo = pickString(regex.registerNo, image.registerNo, text.registerNo),
-        schoolName = pickString(regex.schoolName, image.schoolName, text.schoolName),
-        schoolAddress = pickString(regex.schoolAddress, image.schoolAddress, text.schoolAddress),
-        className = pickString(regex.className, image.className, text.className),
-        section = pickString(regex.section, image.section, text.section),
-        academicYear = pickString(regex.academicYear, image.academicYear, text.academicYear),
-        examType = pickString(regex.examType, image.examType, text.examType),
-        examDate = pickString(regex.examDate, image.examDate, text.examDate),
-        attendanceDaysPresent = pickInt(regex.attendanceDaysPresent, image.attendanceDaysPresent, text.attendanceDaysPresent),
-        attendanceWorkingDays = pickInt(regex.attendanceWorkingDays, image.attendanceWorkingDays, text.attendanceWorkingDays),
-        teacherRemarks = pickString(regex.teacherRemarks, image.teacherRemarks, text.teacherRemarks),
-        totalMarksObtained = pickDouble(regex.totalMarksObtained, image.totalMarksObtained, text.totalMarksObtained),
-        totalMaxMarks = pickDouble(regex.totalMaxMarks, image.totalMaxMarks, text.totalMaxMarks),
-        subjectRows = mergeRowsByName(image.subjectRows, text.subjectRows, regex.subjectRows),
-        coCurricularRows = mergeRowsByName(image.coCurricularRows, text.coCurricularRows, regex.coCurricularRows),
+        studentName = pickName(regex.studentName, cloud.studentName, image.studentName, text.studentName),
+        registerNo = pickString(regex.registerNo, cloud.registerNo, image.registerNo, text.registerNo),
+        schoolName = pickString(regex.schoolName, cloud.schoolName, image.schoolName, text.schoolName),
+        schoolAddress = pickString(regex.schoolAddress, cloud.schoolAddress, image.schoolAddress, text.schoolAddress),
+        className = pickString(regex.className, cloud.className, image.className, text.className),
+        section = pickString(regex.section, cloud.section, image.section, text.section),
+        academicYear = pickString(regex.academicYear, cloud.academicYear, image.academicYear, text.academicYear),
+        examType = pickString(regex.examType, cloud.examType, image.examType, text.examType),
+        examDate = pickString(regex.examDate, cloud.examDate, image.examDate, text.examDate),
+        attendanceDaysPresent = pickInt(
+            regex.attendanceDaysPresent, cloud.attendanceDaysPresent, image.attendanceDaysPresent, text.attendanceDaysPresent,
+        ),
+        attendanceWorkingDays = pickInt(
+            regex.attendanceWorkingDays, cloud.attendanceWorkingDays, image.attendanceWorkingDays, text.attendanceWorkingDays,
+        ),
+        teacherRemarks = pickString(regex.teacherRemarks, cloud.teacherRemarks, image.teacherRemarks, text.teacherRemarks),
+        totalMarksObtained = pickDouble(
+            regex.totalMarksObtained, cloud.totalMarksObtained, image.totalMarksObtained, text.totalMarksObtained,
+        ),
+        totalMaxMarks = pickDouble(regex.totalMaxMarks, cloud.totalMaxMarks, image.totalMaxMarks, text.totalMaxMarks),
+        subjectRows = mergeRowsByName(image.subjectRows, text.subjectRows, cloud.subjectRows, regex.subjectRows),
+        coCurricularRows = mergeRowsByName(image.coCurricularRows, text.coCurricularRows, cloud.coCurricularRows, regex.coCurricularRows),
     )
 }
 

@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -63,7 +65,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
         },
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).padding(16.dp),
+            modifier = Modifier.padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -105,6 +107,8 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
 
             HorizontalDivider()
             AiModelsSection(viewModel)
+            HorizontalDivider()
+            CloudAiSection(viewModel)
             HorizontalDivider()
 
             Text(
@@ -184,6 +188,50 @@ private fun AiModelsSection(viewModel: SettingsViewModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun CloudAiSection(viewModel: SettingsViewModel) {
+    val savedKey by viewModel.geminiApiKey.collectAsState()
+    var keyInput by remember(savedKey) { mutableStateOf(savedKey) }
+    var showKey by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Cloud AI Scanning (Gemini, optional)", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Reads the report photo with Google's Gemini API instead of the small " +
+                "on-device model — far more accurate, and free on typical personal usage " +
+                "(rate-limited free tier). This sends the report photo to Google's servers " +
+                "for each scan, so only add a key if you're fine with that trade-off. Get a " +
+                "free key at aistudio.google.com/apikey — leave this blank to keep scanning " +
+                "fully on-device/offline.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = keyInput,
+            onValueChange = { keyInput = it },
+            label = { Text("Gemini API Key") },
+            visualTransformation = if (showKey) {
+                androidx.compose.ui.text.input.VisualTransformation.None
+            } else {
+                androidx.compose.ui.text.input.PasswordVisualTransformation()
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { showKey = !showKey }) { Text(if (showKey) "Hide" else "Show") }
+            Button(onClick = { viewModel.setGeminiApiKey(keyInput) }, enabled = keyInput != savedKey) { Text("Save Key") }
+            if (savedKey.isNotBlank()) {
+                TextButton(onClick = { keyInput = ""; viewModel.setGeminiApiKey("") }) { Text("Remove") }
+            }
+        }
+        Text(
+            if (savedKey.isNotBlank()) "Cloud AI scanning is active." else "Cloud AI scanning is off (no key saved).",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

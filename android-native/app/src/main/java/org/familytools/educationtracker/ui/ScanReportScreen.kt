@@ -48,6 +48,7 @@ import kotlinx.coroutines.launch
 import org.familytools.educationtracker.services.AiModel
 import org.familytools.educationtracker.services.AiModelManager
 import org.familytools.educationtracker.services.AiReportParser
+import org.familytools.educationtracker.services.GeminiReportParser
 import org.familytools.educationtracker.services.NameMatcher
 import org.familytools.educationtracker.services.OcrService
 import org.familytools.educationtracker.services.ParsedReportCard
@@ -59,6 +60,7 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
     val children by viewModel.children.collectAsState()
     val selectedChildId by viewModel.selectedChildId.collectAsState()
     val aiScanningEnabled by settingsViewModel.isAiScanningEnabled.collectAsState()
+    val geminiApiKey by settingsViewModel.geminiApiKey.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -81,6 +83,7 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
     var rawText by remember { mutableStateOf("") }
     var showRawText by remember { mutableStateOf(false) }
     var showDuplicateDialog by remember { mutableStateOf(false) }
+    var showPartTwoRescanDialog by remember { mutableStateOf(false) }
     var templateAutoLoaded by remember { mutableStateOf(false) }
     // A scanned name that didn't match an existing child is only *staged*
     // here — the Child row itself isn't created until Save is actually
@@ -174,18 +177,18 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
         // if at least one pass actually produced a result, so a model
         // that isn't downloaded, times out, or fails to parse never
         // regresses below what the regex parser alone already found.
-        if (aiScanningEnabled) {
-            val textReady = AiModelManager.isReady(context, AiModel.TEXT)
-            val visionReady = AiModelManager.isReady(context, AiModel.VISION)
-            if (textReady || visionReady) {
-                val (aiText, aiImage) = coroutineScope {
-                    val textDeferred = if (textReady) async { AiReportParser.structureFromText(context, ocr.fullText) } else null
-                    val imageDeferred = if (visionReady) async { AiReportParser.structureFromImage(context, uri) } else null
-                    textDeferred?.await() to imageDeferred?.await()
-                }
-                if (aiText != null || aiImage != null) {
-                    parsed = mergeReportCards(parsed, aiText, aiImage)
-                }
+        val textReady = aiScanningEnabled && AiModelManager.isReady(context, AiModel.TEXT)
+        val visionReady = aiScanningEnabled && AiModelManager.isReady(context, AiModel.VISION)
+        val cloudReady = geminiApiKey.isNotBlank()
+        if (textReady || visionReady || cloudReady) {
+            val (aiText, aiImage, aiCloud) = coroutineScope {
+                val textDeferred = if (textReady) async { AiReportParser.structureFromText(context, ocr.fullText) } else null
+                val imageDeferred = if (visionReady) async { AiReportParser.structureFromImage(context, uri) } else null
+                val cloudDeferred = if (cloudReady) async { GeminiReportParser.structureFromImage(context, uri, geminiApiKey) } else null
+                Triple(textDeferred?.await(), imageDeferred?.await(), cloudDeferred?.await())
+            }
+            if (aiText != null || aiImage != null || aiCloud != null) {
+                parsed = mergeReportCards(parsed, aiText, aiImage, aiCloud)
             }
         }
         return parsed to ocr.fullText
@@ -208,8 +211,8 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
             // page's angle/focus/lighting caught still comes through, and no
             // later (possibly worse) page can override an earlier good read.
             val parsed = combineScannedPages(pageResults.map { it.first })
-            val aiUsed = aiScanningEnabled &&
-                (AiModelManager.isReady(context, AiModel.TEXT) || AiModelManager.isReady(context, AiModel.VISION))
+            val aiUsed = geminiApiKey.isNotBlank() || (aiScanningEnabled &&
+                (AiModelManager.isReady(context, AiModel.TEXT) || AiModelManager.isReady(context, AiModel.VISION)))
 
             val matchedChild = NameMatcher.findBestMatch(children, parsed.studentName)
             pendingNewChildName = ""
@@ -285,6 +288,14 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
             } else {
                 "$childNote Couldn't automatically parse subject rows — please enter marks manually.$templateNote"
             }
+
+            // Only nag about a missing Part-II on what looks like an actual
+            // report scan (Part-I came through) — not on every blank/failed
+            // photo, and not if a co-curricular section is already present
+            // from this scan or a still-pending un-submitted earlier one.
+            if (parsed.subjectRows.isNotEmpty() && coCurricularRows.none { it.subject.isNotBlank() }) {
+                showPartTwoRescanDialog = true
+            }
         } catch (e: Exception) {
             status = "OCR failed: ${e.message}"
         }
@@ -321,6 +332,22 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
                 status = "No pages captured."
             }
         }
+    }
+
+    // Shared by the Live Scan button and the "Part-II missing, capture
+    // another shot?" prompt below — both just need to (re)open the same
+    // scanner session; runOcr()'s "only overwrite a field the new scan
+    // actually found" behavior already makes a supplementary shot safe to
+    // merge on top of what's already in the form.
+    fun launchLiveScan() {
+        val activity = context as? Activity
+        if (activity == null) {
+            status = "Live scanner unavailable here — use Gallery instead."
+            return
+        }
+        scannerClient.getStartScanIntent(activity)
+            .addOnSuccessListener { intentSender -> scanLauncher.launch(IntentSenderRequest.Builder(intentSender).build()) }
+            .addOnFailureListener { e -> status = "Live scanner unavailable (${e.message}) — use Gallery instead." }
     }
 
     Scaffold(
@@ -388,20 +415,7 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = {
-                    val activity = context as? Activity
-                    if (activity == null) {
-                        status = "Live scanner unavailable here — use Gallery instead."
-                        return@Button
-                    }
-                    scannerClient.getStartScanIntent(activity)
-                        .addOnSuccessListener { intentSender ->
-                            scanLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
-                        }
-                        .addOnFailureListener { e ->
-                            status = "Live scanner unavailable (${e.message}) — use Gallery instead."
-                        }
-                }) { Text("Live Scan") }
+                Button(onClick = { launchLiveScan() }) { Text("Live Scan") }
                 Button(onClick = { galleryLauncher.launch("image/*") }) { Text("Gallery") }
             }
             if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -463,6 +477,24 @@ fun ScanReportScreen(viewModel: AcademicRecordsViewModel, settingsViewModel: Set
             },
             confirmButton = { TextButton(onClick = { doSave(force = true) }) { Text("Save Anyway") } },
             dismissButton = { TextButton(onClick = { showDuplicateDialog = false }) { Text("Cancel") } },
+        )
+    }
+
+    if (showPartTwoRescanDialog) {
+        AlertDialog(
+            onDismissRequest = { showPartTwoRescanDialog = false },
+            title = { Text("Part-II not captured") },
+            text = {
+                Text(
+                    "Co-curricular activities (Part-II) weren't read from this scan. " +
+                        "Capture another shot focused on that section? What's already " +
+                        "filled in above won't be lost.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showPartTwoRescanDialog = false; launchLiveScan() }) { Text("Rescan") }
+            },
+            dismissButton = { TextButton(onClick = { showPartTwoRescanDialog = false }) { Text("Skip") } },
         )
     }
 }

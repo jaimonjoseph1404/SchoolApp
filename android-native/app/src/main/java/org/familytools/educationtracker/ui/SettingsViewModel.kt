@@ -19,6 +19,8 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val isAiScanningEnabled: StateFlow<Boolean> = repository.isAiScanningEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val geminiApiKey: StateFlow<String> = repository.geminiApiKey
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
     fun setDarkTheme(enabled: Boolean) {
         viewModelScope.launch { repository.setDarkTheme(enabled) }
@@ -26,6 +28,10 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
 
     fun setAiScanningEnabled(enabled: Boolean) {
         viewModelScope.launch { repository.setAiScanningEnabled(enabled) }
+    }
+
+    fun setGeminiApiKey(key: String) {
+        viewModelScope.launch { repository.setGeminiApiKey(key) }
     }
 
     fun setPin(pin: String, onDone: () -> Unit) {
