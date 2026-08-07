@@ -8,6 +8,11 @@ import kotlin.math.min
 
 data class TrendPoint(val label: String, val value: Double)
 
+/** One exam's marks, in both forms — [percentage] drives chart height
+ * uniformly, [obtained]/[max] are the actual marks for display when the
+ * user wants "actual marks" rather than percentage. */
+data class ExamAggregate(val label: String, val obtained: Double, val max: Double, val percentage: Double)
+
 data class Prediction(
     val predictedValue: Double?,
     val confidence: Double?,
@@ -52,6 +57,39 @@ class AnalyticsEngine(private val academicDao: AcademicDao, private val expenseD
         return groups
     }
 
+    /** Every distinct exam (year + term + exam type) present in [rows], in
+     * first-seen order — the same labels used by every chart/trend below,
+     * so a picked label always lines up with what's plotted. */
+    fun availableExams(rows: List<MarkHistoryRow>): List<String> = examGroups(rows).keys.toList()
+
+    /** The specific mark for one subject within one exam — the entry point
+     * for a "this term, this subject" drill-down (score/grade/remarks for
+     * exactly the one exam+subject combination picked, not an aggregate). */
+    fun findMark(rows: List<MarkHistoryRow>, examLabel: String, subject: String): MarkHistoryRow? =
+        examGroups(rows)[examLabel]?.firstOrNull { it.subjectName == subject }
+
+    /** Overall marks per exam, summed across every subject that has both a
+     * score and a max — the "actual marks" counterpart to [percentageTrend],
+     * which averages percentages instead. */
+    fun overallExamAggregates(rows: List<MarkHistoryRow>): List<ExamAggregate> =
+        examGroups(rows).mapNotNull { (label, group) ->
+            val withMarks = group.filter { it.marksObtained != null && it.maxMarks != null }
+            if (withMarks.isEmpty()) return@mapNotNull null
+            val obtained = withMarks.sumOf { it.marksObtained!! }
+            val max = withMarks.sumOf { it.maxMarks!! }
+            ExamAggregate(label, obtained, max, if (max > 0) obtained / max * 100 else 0.0)
+        }
+
+    /** One subject's marks per exam, in both actual and percentage form. */
+    fun subjectExamAggregates(rows: List<MarkHistoryRow>, subject: String): List<ExamAggregate> =
+        examGroups(rows).mapNotNull { (label, group) ->
+            val row = group.firstOrNull { it.subjectName == subject && it.marksObtained != null && it.maxMarks != null }
+                ?: return@mapNotNull null
+            val max = row.maxMarks!!
+            val obtained = row.marksObtained!!
+            ExamAggregate(label, obtained, max, row.percentage ?: (if (max > 0) obtained / max * 100 else 0.0))
+        }
+
     fun percentageTrend(rows: List<MarkHistoryRow>): List<TrendPoint> =
         examGroups(rows).mapNotNull { (label, group) ->
             val pcts = group.mapNotNull { it.percentage }
@@ -90,21 +128,31 @@ class AnalyticsEngine(private val academicDao: AcademicDao, private val expenseD
             insights.add("Overall performance is declining by roughly %.1f points per exam.".format(kotlin.math.abs(overall.slope)))
         }
 
+        // subject is free text (OCR/AI-extracted or user-typed) — every line
+        // below formats its own number first, then concatenates the subject
+        // name in, rather than interpolating it into the format template.
+        // A subject name that ever contains a literal "%" (a real OCR
+        // failure mode: a stray percentage-column character bleeding into
+        // the name) would otherwise crash String.format on a dangling "%"
+        // (reproduced and fixed once already for the confidence-percentage
+        // string in AnalyticsScreen — same root cause).
         for (subject in subjectAverages(rows).keys.sorted()) {
             val pred = predictSubject(rows, subject)
             if (pred.trend == "improving" && pred.slope != null) {
-                insights.add("$subject scores are trending upward (+%.1f pts/exam).".format(pred.slope))
+                insights.add("$subject scores are trending upward (+" + "%.1f".format(pred.slope) + " pts/exam).")
             } else if (pred.trend == "declining" && pred.slope != null) {
-                insights.add("$subject scores are declining (%.1f pts/exam). Additional support may help.".format(pred.slope))
+                insights.add(
+                    "$subject scores are declining (" + "%.1f".format(pred.slope) + " pts/exam). Additional support may help.",
+                )
             }
         }
 
         val (strengths, weaknesses) = strengthsAndWeaknesses(rows)
         strengths.firstOrNull()?.let { (subject, avg) ->
-            insights.add("$subject is a strength area, averaging %.0f%%.".format(avg))
+            insights.add("$subject is a strength area, averaging " + "%.0f%%.".format(avg))
         }
         weaknesses.firstOrNull()?.let { (subject, avg) ->
-            insights.add("$subject is the weakest area, averaging %.0f%%.".format(avg))
+            insights.add("$subject is the weakest area, averaging " + "%.0f%%.".format(avg))
         }
 
         if (insights.isEmpty()) insights.add("Add more exam records to unlock trend insights.")
@@ -124,13 +172,14 @@ class AnalyticsEngine(private val academicDao: AcademicDao, private val expenseD
             val weak = avg < 50.0
             when {
                 declining && weak -> actions.add(
-                    "$subject: low (%.0f%% avg) and declining — prioritize this subject with focused daily practice or a tutor.".format(avg),
+                    "$subject: low (" + "%.0f%%".format(avg) +
+                        " avg) and declining — prioritize this subject with focused daily practice or a tutor.",
                 )
                 declining -> actions.add(
                     "$subject: trending down — review recent test papers together to catch the specific topics slipping.",
                 )
                 weak -> actions.add(
-                    "$subject: averaging %.0f%% — targeted revision before the next exam could help.".format(avg),
+                    "$subject: averaging " + "%.0f%%".format(avg) + " — targeted revision before the next exam could help.",
                 )
             }
         }

@@ -1,6 +1,8 @@
 package org.familytools.educationtracker.services
 
 import android.content.Context
+import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import androidx.sqlite.db.SupportSQLiteDatabase
 import org.familytools.educationtracker.data.AppDatabase
 import org.json.JSONArray
@@ -98,6 +100,37 @@ object BackupService {
 
     private fun backupsDir(context: Context): File =
         File(context.getExternalFilesDir(null), "backups").apply { mkdirs() }
+
+    /** Every backup already written to the app-private folder, newest
+     * first — lets Import offer "pick one of your own backups" directly,
+     * with no file-picker round-trip needed for the common case of
+     * restoring a backup this same app just made. */
+    fun listLocalBackups(context: Context): List<File> =
+        backupsDir(context).listFiles()?.sortedByDescending { it.lastModified() } ?: emptyList()
+
+    /** Best-effort copy of an already-written backup into a user-picked SAF
+     * folder (outside app-private storage, so it survives an uninstall).
+     * Silently does nothing if no folder is configured or the copy fails —
+     * the app-private copy this runs after is already a complete backup on
+     * its own, so a failure here must never surface as an export failure. */
+    fun copyToExternalFolder(context: Context, file: File, folderUriString: String?) {
+        if (folderUriString.isNullOrBlank()) return
+        try {
+            val dir = DocumentFile.fromTreeUri(context, Uri.parse(folderUriString)) ?: return
+            dir.findFile(file.name)?.delete()
+            val mime = when (file.extension) {
+                "json" -> "application/json"
+                "zip" -> "application/zip"
+                else -> "application/octet-stream"
+            }
+            val target = dir.createFile(mime, file.name) ?: return
+            context.contentResolver.openOutputStream(target.uri)?.use { out ->
+                file.inputStream().use { it.copyTo(out) }
+            }
+        } catch (e: Exception) {
+            // Best-effort, see doc comment above.
+        }
+    }
 
     private fun recordBackup(context: Context, path: String, type: String) {
         db(context).execSQL(

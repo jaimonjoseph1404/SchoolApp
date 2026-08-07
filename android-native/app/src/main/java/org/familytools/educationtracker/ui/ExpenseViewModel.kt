@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.familytools.educationtracker.data.AcademicDao
@@ -33,14 +32,19 @@ class ExpenseViewModel(
     private val _selectedChildId = MutableStateFlow<Long?>(null)
     val selectedChildId: StateFlow<Long?> = _selectedChildId
 
+    // No child selected -> every child's expenses combined (observeAll), not
+    // an empty list — a fresh visit to the Expenses tab previously kept
+    // showing whichever child was selected last time (the ViewModel outlives
+    // the composable), which looked like "only one child's data" even though
+    // the dropdown itself displayed blank.
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val expenses: StateFlow<List<ExpenseRow>> = _selectedChildId
-        .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else expenseDao.observeForChild(id) }
+        .flatMapLatest { id -> if (id == null) expenseDao.observeAll() else expenseDao.observeForChild(id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val total: StateFlow<Double> = _selectedChildId
-        .flatMapLatest { id -> if (id == null) flowOf(0.0) else expenseDao.observeTotalForChild(id) }
+        .flatMapLatest { id -> if (id == null) expenseDao.observeTotalAll() else expenseDao.observeTotalForChild(id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
     init {
@@ -49,9 +53,18 @@ class ExpenseViewModel(
 
     fun selectChild(id: Long) { _selectedChildId.value = id }
 
+    fun clearSelectedChild() { _selectedChildId.value = null }
+
+    private suspend fun resolveClassId(childId: Long, yearLabel: String, className: String): Long? {
+        if (className.isBlank()) return null
+        val yearId = if (yearLabel.isNotBlank()) academicDao.getOrCreateAcademicYear(childId, yearLabel) else return null
+        return academicDao.getOrCreateClass(yearId, className)
+    }
+
     fun addExpense(
         categoryName: String, amount: String, date: String, description: String,
-        yearLabel: String, receiptPath: String, onDone: () -> Unit, onError: (String) -> Unit,
+        yearLabel: String, receiptPath: String, className: String = "",
+        onDone: () -> Unit, onError: (String) -> Unit,
     ) {
         val childId = _selectedChildId.value
         if (childId == null) { onError("Select a child first"); return }
@@ -62,12 +75,31 @@ class ExpenseViewModel(
         viewModelScope.launch {
             val categoryId = expenseDao.getOrCreateCategory(categoryName)
             val yearId = if (yearLabel.isNotBlank()) academicDao.getOrCreateAcademicYear(childId, yearLabel) else null
+            val classId = resolveClassId(childId, yearLabel, className)
             expenseDao.insertExpense(
                 Expense(
-                    childId = childId, academicYearId = yearId, categoryId = categoryId,
+                    childId = childId, academicYearId = yearId, classId = classId, categoryId = categoryId,
                     amount = amountValue, expenseDate = date, description = description, receiptPath = receiptPath,
                 ),
             )
+            onDone()
+        }
+    }
+
+    fun updateExpense(
+        id: Long, childId: Long, categoryName: String, amount: String, date: String, description: String,
+        yearLabel: String, className: String = "",
+        onDone: () -> Unit, onError: (String) -> Unit,
+    ) {
+        if (categoryName.isBlank()) { onError("Category is required"); return }
+        val amountValue = amount.toDoubleOrNull()
+        if (amountValue == null) { onError("Enter a valid amount"); return }
+
+        viewModelScope.launch {
+            val categoryId = expenseDao.getOrCreateCategory(categoryName)
+            val yearId = if (yearLabel.isNotBlank()) academicDao.getOrCreateAcademicYear(childId, yearLabel) else null
+            val classId = resolveClassId(childId, yearLabel, className)
+            expenseDao.updateExpense(id, categoryId, amountValue, date, description, yearId, classId)
             onDone()
         }
     }

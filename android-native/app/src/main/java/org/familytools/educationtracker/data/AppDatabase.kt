@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Expense::class, FeeReceipt::class, OcrHistoryEntry::class, BackupRecord::class,
         SubjectTemplateItem::class, ChildDocument::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -68,6 +68,39 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v6 -> v7 merges duplicate Subject rows that only differ by spacing/
+        // dashes/case (e.g. "English - I", "English -I", "English I" — three
+        // separate OCR/typed variants of one real subject, which fragmented
+        // that subject's marks across three rows and showed as three
+        // separate one-point "trends" instead of one real trend). Keeps the
+        // lowest id per normalized group as canonical, reassigns every
+        // mark/template row pointing at a duplicate onto that canonical id,
+        // then drops the now-empty duplicates. Uses only GROUP BY/subqueries
+        // (no window functions) since the bundled SQLite version varies by
+        // device/API level and window-function support isn't guaranteed.
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TEMP TABLE subject_canonical AS " +
+                        "SELECT REPLACE(REPLACE(UPPER(name), ' ', ''), '-', '') AS norm_key, MIN(id) AS canonical_id " +
+                        "FROM subjects GROUP BY norm_key",
+                )
+                db.execSQL(
+                    "UPDATE marks SET subjectId = (" +
+                        "  SELECT sc.canonical_id FROM subjects s " +
+                        "  JOIN subject_canonical sc ON sc.norm_key = REPLACE(REPLACE(UPPER(s.name), ' ', ''), '-', '') " +
+                        "  WHERE s.id = marks.subjectId" +
+                        ") WHERE subjectId IN (" +
+                        "  SELECT s.id FROM subjects s " +
+                        "  JOIN subject_canonical sc ON sc.norm_key = REPLACE(REPLACE(UPPER(s.name), ' ', ''), '-', '') " +
+                        "  WHERE s.id != sc.canonical_id" +
+                        ")",
+                )
+                db.execSQL("DELETE FROM subjects WHERE id NOT IN (SELECT canonical_id FROM subject_canonical)")
+                db.execSQL("DROP TABLE subject_canonical")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -75,7 +108,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "educationtracker.db",
                 )
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     // Pre-release schema; destructive migration is fine until there's real user data.
                     .fallbackToDestructiveMigration()
                     .build().also { instance = it }

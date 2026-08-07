@@ -80,7 +80,9 @@ class ReportsViewModel(
         for (subject in averages.keys.sorted()) {
             val avg = averages.getValue(subject)
             val trend = engine.predictSubject(rows, subject).trend
-            lines.add("$subject: average %.1f%% ($trend).".format(avg))
+            // subject is free text — format the number alone, then
+            // concatenate (see Charts.kt's LineChartView valueLabel comment).
+            lines.add("$subject: average " + "%.1f%%".format(avg) + " ($trend).")
         }
         lines.addAll(engine.improvementActions(rows))
         return lines

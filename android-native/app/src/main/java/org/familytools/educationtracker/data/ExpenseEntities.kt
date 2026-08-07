@@ -41,6 +41,9 @@ data class ExpenseRow(
     val expenseDate: String,
     val description: String,
     val yearLabel: String?,
+    val className: String? = null,
+    val childName: String = "",
+    val childId: Long = 0,
 )
 
 data class CategoryTotal(val categoryName: String, val total: Double)

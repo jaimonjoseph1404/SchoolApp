@@ -23,6 +23,7 @@ class SettingsRepository(private val context: Context) {
         val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
         val AI_SCANNING_ENABLED = booleanPreferencesKey("ai_scanning_enabled")
         val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
+        val BACKUP_FOLDER_URI = stringPreferencesKey("backup_folder_uri")
     }
 
     val isDarkTheme: Flow<Boolean> = context.dataStore.data.map { it[Keys.THEME_DARK] ?: false }
@@ -33,6 +34,10 @@ class SettingsRepository(private val context: Context) {
     // themselves (from Google AI Studio's free tier) — no separate toggle,
     // since scanning is dormant with no key and active the moment one exists.
     val geminiApiKey: Flow<String> = context.dataStore.data.map { it[Keys.GEMINI_API_KEY] ?: "" }
+    // A user-picked SAF folder (outside app-private storage) that backups
+    // are copied into in addition to the app-private copy — app-private
+    // storage is wiped on uninstall, this folder isn't.
+    val backupFolderUri: Flow<String> = context.dataStore.data.map { it[Keys.BACKUP_FOLDER_URI] ?: "" }
 
     suspend fun setDarkTheme(enabled: Boolean) {
         context.dataStore.edit { it[Keys.THEME_DARK] = enabled }
@@ -44,6 +49,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setGeminiApiKey(key: String) {
         context.dataStore.edit { it[Keys.GEMINI_API_KEY] = key.trim() }
+    }
+
+    suspend fun setBackupFolderUri(uri: String) {
+        context.dataStore.edit { it[Keys.BACKUP_FOLDER_URI] = uri }
     }
 
     suspend fun setBiometricEnabled(enabled: Boolean) {

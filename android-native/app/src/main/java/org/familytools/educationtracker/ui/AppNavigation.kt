@@ -106,7 +106,7 @@ fun AppNavigation(viewModels: AppViewModels, startLocked: Boolean) {
             ReportsScreen(viewModels.reports, onBack = { navController.popBackStack() })
         }
         composable("backup") {
-            BackupScreen(onBack = { navController.popBackStack() })
+            BackupScreen(viewModels.settings, onBack = { navController.popBackStack() })
         }
         composable("settings") {
             SettingsScreen(viewModels.settings, onBack = { navController.popBackStack() })

@@ -75,4 +75,50 @@ class AnalyticsEngineTest {
     fun `improvementActions returns nothing at all when there are no marks yet`() {
         assertEquals(emptyList<String>(), engine.improvementActions(emptyList()))
     }
+
+    @Test
+    fun `overallExamAggregates sums obtained and max across subjects within one exam`() {
+        val rows = listOf(
+            row("English", 55.0, max = 100.0, term = "Term 1"),
+            row("Maths", 43.0, max = 100.0, term = "Term 1"),
+            row("English", 63.0, max = 100.0, term = "Term 2"),
+        )
+        val aggregates = engine.overallExamAggregates(rows)
+        assertEquals(2, aggregates.size)
+        val term1 = aggregates.first { it.label.contains("Term 1") }
+        assertEquals(98.0, term1.obtained, 0.001)
+        assertEquals(200.0, term1.max, 0.001)
+        assertEquals(49.0, term1.percentage, 0.001)
+    }
+
+    @Test
+    fun `subjectExamAggregates only includes exams where that subject has marks`() {
+        val rows = listOf(
+            row("English", 55.0, term = "Term 1"),
+            row("Maths", 43.0, term = "Term 1"),
+            row("Maths", 60.0, term = "Term 2"),
+        )
+        val englishAgg = engine.subjectExamAggregates(rows, "English")
+        assertEquals(1, englishAgg.size)
+        assertTrue(englishAgg[0].label.contains("Term 1"))
+
+        val mathsAgg = engine.subjectExamAggregates(rows, "Maths")
+        assertEquals(2, mathsAgg.size)
+    }
+
+    @Test
+    fun `findMark returns the exact row for one exam and subject, not any other subject's row`() {
+        val rows = listOf(row("English", 55.0, term = "Term 1"), row("Maths", 43.0, term = "Term 1"))
+        val examLabel = engine.availableExams(rows).first()
+        val mark = engine.findMark(rows, examLabel, "Maths")
+        assertEquals(43.0, mark?.marksObtained)
+        assertEquals("Maths", mark?.subjectName)
+    }
+
+    @Test
+    fun `findMark returns null for a subject not present in that exam`() {
+        val rows = listOf(row("English", 55.0, term = "Term 1"))
+        val examLabel = engine.availableExams(rows).first()
+        assertEquals(null, engine.findMark(rows, examLabel, "Maths"))
+    }
 }

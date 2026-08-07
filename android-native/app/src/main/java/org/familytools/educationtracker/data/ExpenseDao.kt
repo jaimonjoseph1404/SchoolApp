@@ -26,24 +26,56 @@ interface ExpenseDao {
     @Insert
     suspend fun insertExpense(expense: Expense): Long
 
+    @Query(
+        "UPDATE expenses SET categoryId = :categoryId, amount = :amount, expenseDate = :expenseDate, " +
+            "description = :description, academicYearId = :academicYearId, classId = :classId WHERE id = :id",
+    )
+    suspend fun updateExpense(
+        id: Long, categoryId: Long, amount: Double, expenseDate: String, description: String,
+        academicYearId: Long?, classId: Long?,
+    )
+
     @Query("DELETE FROM expenses WHERE id = :id")
     suspend fun deleteExpense(id: Long)
 
     @Query(
         """
         SELECT e.id as id, ec.name as categoryName, e.amount as amount, e.expenseDate as expenseDate,
-               e.description as description, ay.yearLabel as yearLabel
+               e.description as description, ay.yearLabel as yearLabel, c2.className as className,
+               e.childId as childId, '' as childName
         FROM expenses e
         JOIN expense_categories ec ON ec.id = e.categoryId
         LEFT JOIN academic_years ay ON ay.id = e.academicYearId
+        LEFT JOIN classes c2 ON c2.id = e.classId
         WHERE e.childId = :childId
         ORDER BY e.expenseDate DESC, e.id DESC
         """,
     )
     fun observeForChild(childId: Long): Flow<List<ExpenseRow>>
 
+    /** Every child's expenses combined — shown while no specific child is
+     * selected, so opening the Expenses tab never silently displays just
+     * whichever child happened to be selected last time. */
+    @Query(
+        """
+        SELECT e.id as id, ec.name as categoryName, e.amount as amount, e.expenseDate as expenseDate,
+               e.description as description, ay.yearLabel as yearLabel, c2.className as className,
+               ch.fullName as childName, e.childId as childId
+        FROM expenses e
+        JOIN expense_categories ec ON ec.id = e.categoryId
+        JOIN children ch ON ch.id = e.childId
+        LEFT JOIN academic_years ay ON ay.id = e.academicYearId
+        LEFT JOIN classes c2 ON c2.id = e.classId
+        ORDER BY e.expenseDate DESC, e.id DESC
+        """,
+    )
+    fun observeAll(): Flow<List<ExpenseRow>>
+
     @Query("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE childId = :childId")
     fun observeTotalForChild(childId: Long): Flow<Double>
+
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM expenses")
+    fun observeTotalAll(): Flow<Double>
 
     @Query(
         """

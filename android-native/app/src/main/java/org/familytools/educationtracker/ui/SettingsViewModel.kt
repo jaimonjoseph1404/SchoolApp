@@ -21,6 +21,12 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val geminiApiKey: StateFlow<String> = repository.geminiApiKey
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val backupFolderUri: StateFlow<String> = repository.backupFolderUri
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    fun setBackupFolderUri(uri: String) {
+        viewModelScope.launch { repository.setBackupFolderUri(uri) }
+    }
 
     fun setDarkTheme(enabled: Boolean) {
         viewModelScope.launch { repository.setDarkTheme(enabled) }

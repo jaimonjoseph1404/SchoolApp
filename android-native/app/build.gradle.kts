@@ -18,8 +18,8 @@ android {
         // Bump the 3rd (patch) digit of versionName, and versionCode by 1,
         // on every build handed off for install — not on every incidental
         // Gradle invocation during dev/test.
-        versionCode = 6
-        versionName = "1.0.5"
+        versionCode = 7
+        versionName = "1.0.6"
     }
 
     buildTypes {
@@ -92,6 +92,11 @@ dependencies {
 
     // Camera capture (system camera app via intent) + gallery/file picking
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+
+    // Writing backups into a user-picked folder (Storage Access Framework
+    // tree) outside app-private storage, so they survive an uninstall —
+    // the standard, recommended wrapper over DocumentsContract for this.
+    implementation("androidx.documentfile:documentfile:1.0.1")
 
     // Live document scanner (Play Services) — real-time framing, auto-focus/
     // auto-capture, edge detection + perspective correction, multi-page

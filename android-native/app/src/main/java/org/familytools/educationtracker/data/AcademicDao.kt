@@ -43,14 +43,26 @@ interface AcademicDao {
         findTerm(classId, termName.trim()) ?: insertTerm(Term(classId = classId, termName = termName.trim()))
 
     // --- Subjects ---
-    @Query("SELECT id FROM subjects WHERE name = :name LIMIT 1")
-    suspend fun findSubject(name: String): Long?
+    // Matches ignoring spaces/dashes/case — "English - I", "English -I" and
+    // "English I" are the same subject read slightly differently by OCR
+    // across separate scans, and used to silently create three separate
+    // Subject rows (so e.g. the subject-trend chart showed three one-point
+    // "trends" instead of one real trend). Roman-numeral suffixes like "I"
+    // vs "II" are still distinct since removing spaces/dashes doesn't merge
+    // those digits together.
+    @Query(
+        "SELECT id FROM subjects WHERE REPLACE(REPLACE(UPPER(name), ' ', ''), '-', '') = :normalizedName LIMIT 1",
+    )
+    suspend fun findSubjectNormalized(normalizedName: String): Long?
 
     @Insert
     suspend fun insertSubject(subject: Subject): Long
 
-    suspend fun getOrCreateSubject(name: String): Long =
-        findSubject(name.trim()) ?: insertSubject(Subject(name = name.trim()))
+    suspend fun getOrCreateSubject(name: String): Long {
+        val trimmed = name.trim()
+        val normalized = trimmed.uppercase().replace(" ", "").replace("-", "")
+        return findSubjectNormalized(normalized) ?: insertSubject(Subject(name = trimmed))
+    }
 
     @Query("SELECT DISTINCT s.name FROM subjects s " +
         "JOIN marks m ON m.subjectId = s.id " +
